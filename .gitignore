@@ -1,0 +1,35 @@
+# secrets
+.env
+*.pem
+
+# data & model weights (never commit - data/models can reach several GB)
+data/raw/*
+data/processed/*
+data/models/*
+!data/**/.gitkeep
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# eval output (the labelled golden set IS committed; run artefacts are not)
+eval/runs/
+eval/reports/
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

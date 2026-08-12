@@ -1,0 +1,140 @@
+# POC stack - every service is free and self-hosted.
+# Minimal run:  docker compose up -d qdrant postgres valkey
+# Full run:     docker compose --profile full up -d
+# With traces:  docker compose --profile full --profile observability up -d
+
+name: insurance-rag
+
+services:
+
+  # ---------------------------------------------------------------- data plane
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.0          # Apache-2.0. Keep in lockstep with
+                                          # qdrant-client in pyproject - the client
+                                          # warns if major/minor drift.
+    restart: unless-stopped
+    ports:
+      # Host ports are parameterized so this stack can coexist with anything
+      # already running locally. Override in .env, not here.
+      - "${QDRANT_HTTP_PORT:-6333}:6333"   # REST + dashboard at /dashboard
+      - "${QDRANT_GRPC_PORT:-6334}:6334"   # gRPC (used by the app - faster batch upserts)
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__STORAGE__PERFORMANCE__MAX_OPTIMIZATION_THREADS: 2
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine              # PostgreSQL Licence
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-insurance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance}
+      POSTGRES_DB: ${POSTGRES_DB:-insurance_rag}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-insurance}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8-alpine          # BSD-3. Redis-compatible, avoids the SSPL relicence
+    restart: unless-stopped
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+    command: ["valkey-server", "--appendonly", "yes"]
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------- app plane
+
+  api:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${API_PORT_HOST:-8000}:8000"
+    env_file: [.env]
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-insurance}:${POSTGRES_PASSWORD:-insurance}@postgres:5432/${POSTGRES_DB:-insurance_rag}
+      REDIS_URL: redis://valkey:6379/0
+    volumes:
+      - ./data:/app/data                   # raw uploads + HuggingFace model cache
+    depends_on:
+      qdrant:    { condition: service_healthy }
+      postgres:  { condition: service_healthy }
+      valkey:    { condition: service_healthy }
+
+  worker:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-insurance}:${POSTGRES_PASSWORD:-insurance}@postgres:5432/${POSTGRES_DB:-insurance_rag}
+      REDIS_URL: redis://valkey:6379/0
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      api:
+        condition: service_started
+    # Ingestion is CPU-bound on bge-m3. Keep concurrency at or below physical cores.
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+
+  ui:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/ui.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${UI_PORT_HOST:-8501}:8501"
+    environment:
+      API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_started
+
+  # ---------------------------------------------------------------- optional
+
+  langfuse:
+    profiles: ["observability"]
+    image: langfuse/langfuse:2             # MIT core
+    restart: unless-stopped
+    ports:
+      - "${LANGFUSE_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-insurance}:${POSTGRES_PASSWORD:-insurance}@postgres:5432/langfuse
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-in-env}
+      SALT: ${LANGFUSE_SALT:-change-me-in-env}
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  qdrant_data:
+  postgres_data:
+  valkey_data:
