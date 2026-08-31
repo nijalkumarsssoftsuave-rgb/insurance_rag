@@ -18,7 +18,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ui.api_client import ApiClient, ApiError  # noqa: E402
-from ui.components.citations import render_citations  # noqa: E402
+from ui.components.citations import render_citations, render_inspection  # noqa: E402
 
 st.set_page_config(page_title="Chat", page_icon="💬", layout="wide")
 
@@ -96,6 +96,7 @@ for turn in st.session_state.turns:
             st.markdown(turn["answer"])
 
         render_citations(turn.get("citations") or [])
+        render_inspection(turn)
 
         meta = []
         if turn.get("intent"):
@@ -150,7 +151,24 @@ if question:
         else:
             st.markdown(answer.answer)
 
+        turn = {
+            "question": question,
+            "answer": answer.answer,
+            "citations": answer.citations,
+            "intent": answer.intent,
+            "abstained": answer.abstained,
+            "verified": answer.verified,
+            "top_score": answer.top_score,
+            "latency_ms": answer.latency_ms,
+            "below_threshold": answer.below_threshold,
+            "broadened": answer.broadened,
+            "query_variants": answer.query_variants,
+            "context_blocks": answer.context_blocks,
+            "timings_ms": answer.timings_ms,
+        }
+
         render_citations(answer.citations)
+        render_inspection(turn)
 
         meta = []
         if answer.intent:
@@ -160,15 +178,4 @@ if question:
             meta.append(f"match {answer.top_score:.2f}")
         st.caption(" · ".join(meta))
 
-        st.session_state.turns.append(
-            {
-                "question": question,
-                "answer": answer.answer,
-                "citations": answer.citations,
-                "intent": answer.intent,
-                "abstained": answer.abstained,
-                "verified": answer.verified,
-                "top_score": answer.top_score,
-                "latency_ms": answer.latency_ms,
-            }
-        )
+        st.session_state.turns.append(turn)

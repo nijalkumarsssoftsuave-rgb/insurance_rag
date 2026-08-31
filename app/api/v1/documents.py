@@ -20,7 +20,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
-from app.core.enums import DocType, IngestionStatus
+from app.core.enums import ChunkKind, DocType, IngestionStatus
 from app.db.models import Chunk, Document, DocumentVersion
 from app.deps import DbSession
 from app.logging import get_logger
@@ -241,9 +241,15 @@ async def corpus_stats(session: DbSession, tenant_id: str = "default") -> Corpus
         )
     )
     chunks = await session.scalar(select(func.count(Chunk.id)).where(Chunk.tenant_id == tenant_id))
+    # Parents are stored and timestamped but never embedded - they are fetched by
+    # id after their children match. Counting them here reported 258 "embedded"
+    # chunks against 139 points in Qdrant, which reads as a broken index rather
+    # than as parent-document retrieval working correctly.
     embedded = await session.scalar(
         select(func.count(Chunk.id)).where(
-            Chunk.tenant_id == tenant_id, Chunk.indexed_at.is_not(None)
+            Chunk.tenant_id == tenant_id,
+            Chunk.indexed_at.is_not(None),
+            Chunk.kind != ChunkKind.PARENT,
         )
     )
     return CorpusStats(

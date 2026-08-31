@@ -29,6 +29,12 @@ class AppSettings(BaseSettings):
     api_host: str = "0.0.0.0"  # noqa: S104 - containerized, bound by compose
     api_port: int = 8000
 
+    # POC only: link the demo subject to the holder written by
+    # scripts/seed_claims.py so the claim lane can be demonstrated. Off by
+    # default, which leaves the subject owning nothing and makes claim lookups
+    # refuse - the honest behaviour for an unauthenticated caller.
+    demo_policy_holder: bool = False
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def is_production(self) -> bool:

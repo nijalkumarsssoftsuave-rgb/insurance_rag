@@ -63,7 +63,22 @@ with st.form("upload", clear_on_submit=True):
         type=["pdf", "docx", "doc", "txt", "md"],
         help="Text-based PDFs only. Scanned documents need OCR, which is disabled.",
     )
-    label = st.selectbox("Document type", list(DOC_TYPES), index=0)
+
+    # Document type is detected from the filename and cover page, so the common
+    # path is one click. It stays available as an override because detection is
+    # good, not perfect - and asking every uploader to classify a legal document
+    # is a worse default than getting it wrong occasionally.
+    with st.expander("Set the document type manually"):
+        st.caption(
+            "Leave this alone unless the detected type comes out wrong - "
+            "it is read from the document."
+        )
+        label = st.selectbox(
+            "Document type",
+            ["Detect automatically", *DOC_TYPES],
+            index=0,
+        )
+
     submitted = st.form_submit_button("Upload and index", type="primary")
 
 if submitted:
@@ -71,9 +86,11 @@ if submitted:
         st.warning("Choose a file first.")
     else:
         data = uploaded.getvalue()
+        # None lets the pipeline detect the type; anything else is an override.
+        chosen = None if label == "Detect automatically" else DOC_TYPES[label]
         with st.spinner(f"Uploading {uploaded.name} ({len(data) / 1e6:.1f} MB)..."):
             try:
-                result = client.upload(uploaded.name, data, doc_type=DOC_TYPES[label])
+                result = client.upload(uploaded.name, data, doc_type=chosen)
             except ApiError as exc:
                 st.error(str(exc))
                 st.stop()
@@ -97,16 +114,65 @@ if submitted:
                 progress.progress(pct, text=text)
 
                 if status == "completed":
+                    # Say what the type came out as. The field is hidden by
+                    # default now, so a wrong detection would otherwise be
+                    # invisible until someone noticed the answers were off.
+                    detected = (doc.get("doc_type") or "other").replace("_", " ")
+                    product = doc.get("product_name")
                     outcome.success(
                         f"Indexed **{doc.get('page_count') or '?'} pages** into "
                         f"**{doc.get('chunk_count') or '?'} chunks** "
-                        f"using `{doc.get('parser')}`.",
+                        f"using `{doc.get('parser')}`.\n\n"
+                        f"Detected as **{detected}**"
+                        + (f" · **{product}**" if product else "")
+                        + ". Re-upload with the type set manually if that is wrong.",
                         icon="✅",
                     )
                     break
                 if status == "failed":
                     outcome.error(doc.get("error") or "Ingestion failed.", icon="❌")
                     break
+
+def _remove_panel(client: ApiClient, doc: dict) -> None:
+    """Delete confirmation for the selected document.
+
+    Deliberately two clicks. Removing a wording is instant and costs roughly six
+    minutes of CPU to undo, so it asks once - but it asks by naming the file and
+    the number of chunks that disappear, rather than with a generic "are you
+    sure?" that nobody reads.
+    """
+    with st.container(border=True):
+        st.markdown(f"**{doc['filename']}**")
+
+        chunks = doc.get("chunk_count") or 0
+        product = doc.get("product_name") or "no product recorded"
+        st.caption(
+            f"Removing this deletes **{chunks} searchable chunks** ({product}) from the "
+            "index. The assistant will no longer be able to answer from it."
+        )
+
+        confirm_key = f"confirm_delete_{doc['document_id']}"
+        confirmed = st.checkbox(
+            f"Yes, remove {doc['filename']} from the index", key=confirm_key
+        )
+
+        if st.button("Delete document", type="primary", disabled=not confirmed):
+            try:
+                client.delete_document(doc["document_id"])
+            except ApiError as exc:
+                st.error(str(exc))
+                return
+            # Drop the tick so the panel does not come back pre-armed for
+            # whatever row lands in this position next.
+            st.session_state.pop(confirm_key, None)
+            st.toast(f"Removed {doc['filename']}", icon="🗑️")
+            st.rerun()
+
+        st.caption(
+            "The uploaded file itself is kept in object storage - a disputed answer "
+            "months later needs the source document. Only the index entry is removed."
+        )
+
 
 st.divider()
 
@@ -148,7 +214,26 @@ else:
             for d in documents
         ]
     )
-    st.dataframe(frame, hide_index=True, width="stretch")
+    st.caption("Select a row to remove that document from the index.")
+
+    # Row selection rather than a separate dropdown: picking the thing you are
+    # looking at is harder to get wrong than re-finding it by name in a list, and
+    # deleting the wrong policy wording means re-embedding it for six minutes.
+    event = st.dataframe(
+        frame,
+        hide_index=True,
+        width="stretch",
+        on_select="rerun",
+        selection_mode="single-row",
+        key="doc_table",
+    )
+
+    # `frame` is built in `documents` order, so the row index maps straight back.
+    selected_rows = event.selection.rows if event and event.selection else []
+    selected = documents[selected_rows[0]] if selected_rows else None
+
+    if selected:
+        _remove_panel(client, selected)
 
     failed = [d for d in documents if d["status"] == "failed"]
     if failed:
@@ -156,21 +241,3 @@ else:
         for d in failed:
             with st.expander(f"❌ {d['filename']}"):
                 st.code(d.get("error") or "No error recorded.")
-
-    with st.expander("Remove a document from the index"):
-        choice = st.selectbox(
-            "Document",
-            options=[d["document_id"] for d in documents],
-            format_func=lambda i: next(d["filename"] for d in documents if d["document_id"] == i),
-        )
-        st.caption(
-            "Deletes the chunks and the vectors. The original upload is kept - "
-            "a disputed answer months later needs the source document."
-        )
-        if st.button("Delete", type="secondary"):
-            try:
-                client.delete_document(choice)
-                st.success("Deleted.")
-                st.rerun()
-            except ApiError as exc:
-                st.error(str(exc))

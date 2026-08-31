@@ -52,7 +52,13 @@ _MONTHS = {
 DOC_TYPE_HINTS: tuple[tuple[DocType, re.Pattern[str]], ...] = (
     (DocType.ENDORSEMENT, re.compile(r"\bendorsement\b", re.I)),
     (DocType.CLAIM_FORM, re.compile(r"\bclaim\s+form\b", re.I)),
-    (DocType.CIRCULAR, re.compile(r"\bcircular\b|\bIRDAI\b", re.I)),
+    # "IRDAI" used to appear here and was actively harmful: every Indian
+    # insurance document prints an IRDAI registration number on its cover by
+    # regulation, so it matched policy wordings as often as circulars - and
+    # because CIRCULAR is tested before POLICY_WORDING, it won. A misfiled
+    # wording then had its product name stripped by the product-neutral rule
+    # below and stopped being filterable by product.
+    (DocType.CIRCULAR, re.compile(r"\bcircular\b", re.I)),
     (DocType.SOP, re.compile(r"\bstandard\s+operating\b|\bSOP\b", re.I)),
     (DocType.BROCHURE, re.compile(r"\bbrochure\b|\bprospectus\b", re.I)),
     (
@@ -90,7 +96,15 @@ PROMPT = (
     "- Extract only what is explicitly printed. Never infer or invent.\n"
     "- Leave a field null if the document does not state it.\n"
     "- Dates must be ISO (YYYY-MM-DD).\n"
-    "- The product name is the plan name, not the insurer's name."
+    "- `product_name` is the name of the insurance plan or cover, such as\n"
+    "  'Family Health Optima' or 'Motor Shield Private Car'.\n"
+    "- `product_name` is NEVER a document type. 'Policy Wording', 'Endorsement',\n"
+    "  'Circular', 'Prospectus' and 'Standard Operating Procedure' describe what\n"
+    "  the document IS, not which product it covers. If the text only gives a\n"
+    "  document type, return null for `product_name`.\n"
+    "- `product_name` is never the insurer's name either.\n"
+    "- An internal document that governs process rather than a single product\n"
+    "  (an SOP, a circular) usually has no product name. Return null."
 )
 
 
@@ -112,7 +126,7 @@ def extract_metadata(
         return meta
 
     try:
-        llm_meta = asyncio.run(_extract_with_llm(head))
+        llm_meta = asyncio.run(_extract_with_llm(head, filename))
     except Exception as exc:
         # Metadata is an enrichment, not a gate. A document with no product name
         # is still searchable; a failed ingest is not.
@@ -131,6 +145,15 @@ def extract_metadata(
     if meta.doc_type in (None, DocType.OTHER):
         meta.doc_type = llm_meta.doc_type
 
+    # Process documents govern how claims are handled, not one product. They
+    # frequently mention a product in passing - a claims circular citing the
+    # health wording - and the extractor then attributes the whole document to
+    # it. Tagging them would hide the settlement-timeline circular from a motor
+    # claim question, so they stay product-neutral and remain retrievable for
+    # every product.
+    if meta.doc_type in (DocType.SOP, DocType.CIRCULAR):
+        meta.product_name = None
+
     log.debug(
         "Extracted metadata",
         insurer=meta.insurer,
@@ -141,10 +164,20 @@ def extract_metadata(
     return meta
 
 
-async def _extract_with_llm(head: str) -> _LLMMetadata:
+async def _extract_with_llm(head: str, filename: str = "") -> _LLMMetadata:
+    """Ask for the fields that need reading comprehension.
+
+    The filename is included because policy wordings routinely print their
+    document type on the cover ("Document type: Policy Wording") without ever
+    repeating the plan name, while the file is called
+    ``acme_family_health_optima_wording_v3.2.pdf``. Given only the cover text the
+    model returned "Policy Wording" as the product - which would collapse every
+    wording in the corpus onto one product name.
+    """
     from app.llm import get_llm, system, user
 
-    return await get_llm().structured([system(PROMPT), user(head)], _LLMMetadata, temperature=0.0)
+    body = f"Filename: {filename}\n\n{head}" if filename else head
+    return await get_llm().structured([system(PROMPT), user(body)], _LLMMetadata, temperature=0.0)
 
 
 """Effective window, stated on the cover page of most wordings."""

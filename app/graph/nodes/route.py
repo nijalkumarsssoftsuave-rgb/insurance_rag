@@ -27,8 +27,22 @@ log = get_logger(__name__)
 
 # Cheap pre-extraction. A regex hit is more reliable than a model for a formatted
 # identifier, and it gives the router a fallback when the LLM call fails.
-CLAIM_PATTERN = re.compile(r"\b(?:CLM|CLAIM)[-/ ]?([A-Z0-9]{4,16})\b", re.I)
-POLICY_PATTERN = re.compile(r"\b(?:POL|POLICY)[-/ ]?([A-Z0-9]{4,20})\b", re.I)
+# The body may contain internal separators: real numbers are segmented
+# (CLM-2026-0004), and an earlier `[A-Z0-9]{4,16}` stopped at the first hyphen,
+# so CLM-2026-0004 was looked up as "CLM-2026" and every segmented number came
+# back "not found".
+#
+# The `(?=[A-Z0-9-]*\d)` lookahead requires the body to contain a digit. Without
+# it the prefix alternation eats ordinary English - "claim number CLAIM-2026-0001"
+# matched the word "claim" and captured "NUMBER" - and "POLICY" matched "POL"
+# and captured "ICY". A claim number always has digits; a stray English word
+# does not. `_first_group` strips any redundant repeated prefix.
+CLAIM_PATTERN = re.compile(
+    r"\b(?:CLM|CLAIM)[-/ ]?((?=[A-Z0-9-]*\d)[A-Z0-9]+(?:[-/][A-Z0-9]+){0,4})\b", re.I
+)
+POLICY_PATTERN = re.compile(
+    r"\b(?:POL|POLICY)[-/ ]?((?=[A-Z0-9-]*\d)[A-Z0-9]+(?:[-/][A-Z0-9]+){0,4})\b", re.I
+)
 
 COVERAGE_MARKERS = (
     "cover",
@@ -110,13 +124,28 @@ async def route_node(state: ConversationState) -> dict:
     }
 
 
+_REDUNDANT_PREFIX = re.compile(r"^(?:CLM|CLAIM|POL|POLICY)[-/]?")
+
+
 def _first_group(pattern: re.Pattern[str], text: str) -> str | None:
+    """Extract and canonicalise an identifier.
+
+    Normalising here rather than at the call site means the DB lookup matches
+    however the customer typed it: "claim clm/2026/0004." and "CLM-2026-0004"
+    both resolve to the stored number.
+    """
     match = pattern.search(text)
     if not match:
         return None
-    # Normalise to the canonical form so the DB lookup matches regardless of how
-    # the customer typed it.
-    return f"CLM-{match.group(1).upper()}" if "CLM" in pattern.pattern else match.group(0).upper()
+
+    body = match.group(1).upper().replace("/", "-").strip("-")
+    # "my claim CLM-2026-0004" matches the word "claim" as the prefix and captures
+    # "CLM-2026-0004" as the body, which would yield "CLM-CLM-2026-0004".
+    body = _REDUNDANT_PREFIX.sub("", body).strip("-")
+    if not body or not any(ch.isdigit() for ch in body):
+        return None
+
+    return f"CLM-{body}" if "CLM" in pattern.pattern else f"POL-{body}"
 
 
 def _looks_like_coverage(question: str) -> bool:

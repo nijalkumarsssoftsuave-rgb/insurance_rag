@@ -142,12 +142,42 @@ def test_broadening_drops_soft_filters_but_keeps_tenant() -> None:
     assert wide.tenant_id == "acme"
     assert wide.product_name is None
     assert wide.insurer is None
-    assert wide.date_of_loss is None
+
+
+def test_broadening_keeps_the_effective_date_window() -> None:
+    """Widening the search must not widen it to wordings that no longer apply.
+
+    This previously dropped ``date_of_loss``, and because the product filter
+    almost never matched, the broadened retry ran on nearly every question - so
+    the superseded wording was retrieved alongside the current one and answers
+    quoted both.
+    """
+    narrow = filters.RetrievalFilter(tenant_id="acme", date_of_loss=date(2024, 1, 1))
+    wide = narrow.broadened()
+
+    assert wide.date_of_loss == date(2024, 1, 1)
+    keys = _keys(filters.build(wide))
+    assert Payload.EFFECTIVE_FROM_TS in keys
+    assert Payload.EFFECTIVE_TO_TS in keys
 
 
 def test_parents_are_excluded_from_vector_search_by_default() -> None:
     """Parents are fetched by id during expansion, not matched by embedding."""
     assert ChunkKind.PARENT not in filters.RetrievalFilter().kinds
+
+
+def test_untyped_documents_are_still_searchable() -> None:
+    """A document whose type could not be detected must not become invisible.
+
+    `OTHER` is where detection lands when it finds nothing. Omitting it from the
+    searched types indexed and embedded the document, listed it in the UI, and
+    then never retrieved it - a failure with no visible symptom.
+    """
+    from app.graph.nodes.retrieve import SEARCHABLE_DOC_TYPES
+
+    assert DocType.OTHER in SEARCHABLE_DOC_TYPES
+    # A blank claim form carries no policy text worth quoting, so it stays out.
+    assert DocType.CLAIM_FORM not in SEARCHABLE_DOC_TYPES
 
 
 # ─────────────────────────────────────────────────────────── reranker

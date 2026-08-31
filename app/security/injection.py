@@ -125,18 +125,38 @@ UNTRUSTED_PREAMBLE = (
 )
 
 
-def wrap_untrusted(chunks: list[tuple[str, str]]) -> str:
-    """Fence retrieved content with explicit ids.
+def wrap_untrusted(chunks: list[tuple[str, str | None, str]]) -> str:
+    """Fence retrieved content with explicit ids and clause paths.
 
     Args:
-        chunks: (chunk_id, text) pairs, already ordered for packing.
+        chunks: (chunk_id, section_path, text) triples, already ordered for packing.
 
     The id on each block is what the citation contract refers to, so the model
-    cannot cite a source that was not actually retrieved.
+    cannot cite a source that was not actually retrieved. The section path is what
+    lets it name the clause without guessing the number.
     """
-    blocks = [f'<document id="{cid}">\n{_neutralize(text)}\n</document>' for cid, text in chunks]
+    blocks = []
+    for cid, section, text in chunks:
+        section_attr = f' section="{_attr(section)}"' if section else ""
+        blocks.append(f'<document id="{cid}"{section_attr}>\n{_neutralize(text)}\n</document>')
     body = "\n\n".join(blocks)
     return f"{UNTRUSTED_PREAMBLE}\n\n<retrieved_context>\n{body}\n</retrieved_context>"
+
+
+def _attr(value: str) -> str:
+    """Make document-derived text safe inside a quoted attribute.
+
+    The section path comes from the document's own headings, so it is untrusted
+    like the body. Quotes and angle brackets would let it close the attribute and
+    forge additional markup.
+    """
+    return (
+        value.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\n", " ")[:200]
+    )
 
 
 def _neutralize(text: str) -> str:

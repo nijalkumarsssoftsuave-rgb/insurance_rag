@@ -40,15 +40,30 @@ class RetrievalFilter:
         """The retry filter.
 
         When the confidence gate fires, the most likely cause is an over-narrow
-        filter - a product name the user phrased differently, or a date window
-        that excluded the right document. Drop the soft constraints, keep tenant
-        isolation, which is never negotiable.
+        filter - typically a product name the user phrased differently. Drop the
+        soft constraints, keep the two that are never negotiable: tenant
+        isolation, and the effective-date window.
+
+        The date window used to be dropped here, and that was a correctness bug,
+        not a recall tweak. Retrieval scored 0.0 on nearly every question because
+        `product_name` never matched, so the broadened retry ran constantly - and
+        with the window gone, the superseded 2024-2026 wording became eligible
+        again. A dental question then retrieved "excluded in all circumstances"
+        (expired) *and* "unless necessitated by an accident" (in force) into one
+        context, and the model answered with both. The groundedness check caught
+        it only intermittently, so the same question passed or abstained at
+        random.
+
+        A wording that is not in force cannot be the basis of an answer, however
+        badly the first attempt scored. Widening the search must never widen it
+        to documents that no longer apply.
         """
         return RetrievalFilter(
             tenant_id=self.tenant_id,
             language=self.language,
             include_superseded=self.include_superseded,
             kinds=self.kinds,
+            date_of_loss=self.date_of_loss,
         )
 
 

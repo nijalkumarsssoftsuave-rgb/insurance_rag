@@ -66,22 +66,40 @@ Re-uploading identical bytes is detected by content hash and skipped instantly.
 ## Evaluation
 
 The eval harness is not optional tooling — it decides the chunking and retrieval
-parameters. Build it before tuning anything.
+parameters.
 
 ```bash
-python -m eval.harness --dataset eval/golden/questions.jsonl   # baseline run
-python -m eval.ablations --grid configs/ablation_grid.yaml     # parameter sweep
-python -m eval.report --compare baseline latest                # regression verdict
+# Deterministic run. Query expansion calls an LLM to paraphrase each question, so
+# leaving it on makes the number irreproducible - the paraphrase moves the candidate
+# pool underneath the reranker. See eval/RESULTS.md.
+QUERY_EXPANSION_ENABLED=false python -m eval.harness -k 3 --label baseline --out eval/runs/baseline.json
+
+python -m eval.harness --only q13 q14      # re-run named questions
+python -m eval.harness --questions <path>  # a different question set
 ```
+
+Each run prints hit-rate@3, hit-rate@1, recall@3, MRR and abstention accuracy, and
+labels every question `RETRIEVAL_FAIL`, `RETRIEVED_OK`, `ABSTAIN_OK` or
+`OVER_ANSWERED` — the retrieval-versus-generation split. Full per-question output,
+including every reranked candidate and its score, goes to the `--out` JSON.
+
+**Latest measured result: [eval/RESULTS.md](eval/RESULTS.md)** — hit-rate@3 0.9524 to
+1.0000 from one change to the cross-encoder input, with the failures it did *not* fix.
+
+`eval/ablations.py` and `eval/report.py` are still stubs; there is no parameter sweep
+or CI regression gate yet.
 
 ## Layout
 
 ```
 app/         backend — api, graph, ingestion, retrieval, claims, security
 ui/          Streamlit frontend
-eval/        golden dataset, metrics, ablation runner
+eval/        golden dataset, metrics, harness, measured results
 scripts/     one-shot operational scripts
 tests/       unit · integration · security (authorization regression suite)
+docs/        ARCHITECTURE.md — design rationale and licence audit
+docker/      container definitions
+pdf/         generated sample corpus (scripts/generate_sample_docs.py)
 data/        raw uploads and model weights (gitignored)
 ```
 

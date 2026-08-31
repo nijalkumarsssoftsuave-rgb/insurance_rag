@@ -79,9 +79,18 @@ class PackedContext:
     def chunk_ids(self) -> list[str]:
         return [b.chunk_id for b in self.blocks]
 
-    def as_pairs(self) -> list[tuple[str, str]]:
-        """(chunk_id, text) in final order, ready for ``wrap_untrusted``."""
-        return [(b.chunk_id, b.text) for b in self.blocks]
+    def as_pairs(self) -> list[tuple[str, str | None, str]]:
+        """(chunk_id, section_path, text) in final order, for ``wrap_untrusted``.
+
+        The section path is included because the generation prompt requires the
+        answer to name the clause ("Clause 4.11, Dental Treatment") while the
+        context used to carry only the id and the text. Asked for a clause number
+        it had never been shown, the model produced plausible ones: a motor
+        exclusions answer cited clauses 8.1-8.4 for text that lives in 7.1-7.4.
+        Those inventions are also what the groundedness check intermittently
+        rejected, which is why the same question passed or abstained at random.
+        """
+        return [(b.chunk_id, b.section_path, b.text) for b in self.blocks]
 
 
 def expand_to_parents(store: VectorStore, ranked: Sequence[RerankedHit]) -> list[ContextBlock]:

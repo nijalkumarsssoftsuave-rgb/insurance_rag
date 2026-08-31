@@ -24,8 +24,18 @@ from app.db.session import async_session_scope
 from app.graph.state import ConversationState
 from app.logging import get_logger
 from app.security.audit import record
+from app.security.authz import AuthorizationError
 
 log = get_logger(__name__)
+
+# Deliberately says nothing about whether claims exist for anyone else, for the
+# same reason `service.not_found_message` is identical for "no such claim" and
+# "not yours".
+NO_POLICY_HOLDER_MESSAGE = (
+    "I can't see any policies linked to this account, so there are no claims for me "
+    "to look up. If you believe your policy should be linked, please contact support "
+    "and they can connect it for you."
+)
 
 
 async def claim_lookup_node(state: ConversationState) -> dict:
@@ -33,6 +43,21 @@ async def claim_lookup_node(state: ConversationState) -> dict:
     subject = state["subject"]
     route = state.get("route") or {}
     claim_number = route.get("claim_number")
+
+    # An unlinked account is an ordinary outcome, not a fault. `require_policy_holder`
+    # raises by design so no caller can reach an unscoped query, but that exception
+    # used to travel all the way out of the graph and surface as HTTP 500 - so the
+    # customer saw a crash where the correct response was "I can't see any policies
+    # on this account". Catch it at the lane boundary and answer normally; the
+    # scoping guarantee is unchanged because we still never run the query.
+    # Mirrors the condition in `repository._scoped`: staff are scoped by tenant and
+    # never need a holder id, so only a non-staff subject is checked here.
+    if not subject.can_read_any_claim:
+        try:
+            subject.require_policy_holder()
+        except AuthorizationError as exc:
+            log.info("Claim lookup refused - subject has no policy holder", reason=str(exc))
+            return _done(answer=NO_POLICY_HOLDER_MESSAGE, found=False, started=started)
 
     async with async_session_scope() as session:
         # No claim number: list what this subject actually has, rather than

@@ -46,9 +46,12 @@ class ChatAnswer:
     query_variants: list[str] | None = None
     timings_ms: dict | None = None
     latency_ms: int = 0
+    retrieved_chunk_ids: list[str] | None = None
+    context_blocks: list[dict] | None = None
+    broadened: bool = False
 
     @classmethod
-    def from_payload(cls, data: dict) -> "ChatAnswer":
+    def from_payload(cls, data: dict) -> ChatAnswer:
         """Build from the API response, ignoring fields this client does not know.
 
         `cls(**data)` raises TypeError the moment the backend adds a response
@@ -128,12 +131,23 @@ class ApiClient:
 
     # ──────────────────────────────────────────────────────── documents
 
-    def upload(self, filename: str, data: bytes, *, doc_type: str = "other") -> UploadResult:
+    def upload(
+        self, filename: str, data: bytes, *, doc_type: str | None = None
+    ) -> UploadResult:
+        """Upload a document for indexing.
+
+        ``doc_type=None`` means "let the server work it out": the API defaults to
+        ``other``, and the ingestion pipeline then overwrites it with the type
+        detected from the filename and cover page. Passing an explicit value
+        suppresses that detection, because a caller who states the type is taken
+        at their word.
+        """
+        form = {} if doc_type is None else {"doc_type": doc_type}
         try:
             response = self._client.post(
                 "/api/v1/documents",
                 files={"file": (filename, data)},
-                data={"doc_type": doc_type},
+                data=form,
                 timeout=UPLOAD_TIMEOUT,
             )
         except httpx.RequestError as exc:

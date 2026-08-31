@@ -27,13 +27,34 @@ from typing import Any
 from app.config import ensure_model_cache, settings
 from app.logging import get_logger
 from app.retrieval.rerankers.base import RerankedHit, Reranker
-from app.retrieval.vectorstore import SearchHit
+from app.retrieval.vectorstore import Payload, SearchHit
 
 log = get_logger(__name__)
 
 # Cross-encoders truncate long inputs anyway; score the child chunk that was
 # actually retrieved rather than a parent that would be cut mid-clause.
 MAX_PAIR_TOKENS = 512
+
+
+def pair_text(hit: SearchHit) -> str:
+    """What the cross-encoder actually reads: breadcrumb, then chunk text.
+
+    Ingestion prefixes the section breadcrumb onto ``embedded_text`` for the
+    bi-encoder, but the cross-encoder - the one model that reads query and chunk
+    *together* - was handed the bare ``payload["text"]``. A table chunk is
+    pipe-markdown with no prose in it, so without its heading there was nothing
+    for the model to match a question against.
+
+    Measured before/after on the golden set: ``eval/runs/RESULTS.md``. Note the
+    regression recorded there as well as the gain - this lifts ranking and
+    compresses scores, and the abstention gate reads the scores.
+    """
+    breadcrumb = " | ".join(
+        str(value)
+        for key in (Payload.PRODUCT_NAME, Payload.SECTION_PATH)
+        if (value := hit.payload.get(key))
+    )
+    return breadcrumb + "\n" + hit.text if breadcrumb else hit.text
 
 
 class BGEReranker:
@@ -94,7 +115,7 @@ class BGEReranker:
         self.load()
         import torch
 
-        pairs = [(query, hit.text) for hit in hits]
+        pairs = [(query, pair_text(hit)) for hit in hits]
         started = time.perf_counter()
         scores: list[float] = []
 

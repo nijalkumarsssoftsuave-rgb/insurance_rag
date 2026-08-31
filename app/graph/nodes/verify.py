@@ -29,6 +29,13 @@ log = get_logger(__name__)
 
 CITATION_PATTERN = re.compile(r"\[([0-9a-fA-F-]{8,})\]")
 
+# "Clause 4.11", "clause 7.3," - the reference a customer or a grievance officer
+# will look up in the wording.
+CLAUSE_REFERENCE = re.compile(r"\bclause\s+(\d+(?:\.\d+)*)", re.I)
+# Any numbering that appears in a section path, so "SECTION 4 - EXCLUSIONS >
+# 4.11 Dental Treatment" yields both "4" and "4.11".
+SECTION_NUMBER = re.compile(r"\b(\d+(?:\.\d+)*)\b")
+
 # Only a *positive* coverage claim needs the exclusions check. An answer that
 # says "dental is excluded" IS the exclusion - demanding it also prove it checked
 # exclusions rejects correct answers, which is what happened: three of four
@@ -83,7 +90,16 @@ async def verify_node(state: ConversationState) -> dict:
     if asserts_coverage and not citations and not inline_ids:
         notes.append("uncited_coverage_assertion")
 
-    if fabricated or "uncited_coverage_assertion" in notes:
+    # A clause reference is checkable without a model, so it is checked without
+    # one. The groundedness judge does not reliably catch a renumbered clause -
+    # it reads "excluded under Clause 8.2" against text that really is an
+    # exclusion and calls it supported, missing that the text lives in 4.11.
+    # A customer who looks up 8.2 finds the wrong rule or no rule at all.
+    if invented := _invented_clauses(answer, state.get("context_blocks") or []):
+        notes.append(f"invented_clause_refs:{','.join(sorted(invented))}")
+        log.warning("Answer cited clauses not present in retrieval", clauses=sorted(invented))
+
+    if fabricated or invented or "uncited_coverage_assertion" in notes:
         return _reject(notes, started)
 
     # ── layer 2: model-based, only where it earns its latency ────────────
@@ -96,19 +112,29 @@ async def verify_node(state: ConversationState) -> dict:
         }
 
     prompt = registry.load("verify")
+    question = state.get("standalone_question") or state["question"]
+    context = state.get("context_text", "")
+
     try:
-        result = await get_llm().structured(
-            [
-                system(prompt.body),
-                user(
-                    f"{state.get('context_text', '')}\n\n"
-                    f"QUESTION: {state.get('standalone_question') or state['question']}\n\n"
-                    f"ANSWER: {answer}"
-                ),
-            ],
-            VerificationResult,
-            temperature=0.0,
-        )
+        result = await _check(prompt.body, context, question, answer)
+
+        # A single judgement is not stable enough to abstain on. Even at
+        # temperature 0 the check is not deterministic, and it was rejecting
+        # answers whose figures are quoted verbatim in the context - "the waiting
+        # period for maternity benefits is 36 months" against a table row reading
+        # "Maternity benefit | 36 months". The same question passed or abstained
+        # at random across runs.
+        #
+        # So a failure is confirmed, not taken on trust. The second call costs a
+        # round trip only when the first one already said no, and a genuinely
+        # ungrounded answer fails both. This tightens what abstention *means*
+        # rather than loosening the guard: we still abstain, just not on noise.
+        if not result.grounded:
+            second = await _check(prompt.body, context, question, answer)
+            if second.grounded:
+                log.info("Groundedness check disagreed with itself, accepting on retry")
+                notes.append("groundedness_flaky")
+                result = second
     except Exception as exc:
         # A failed check is not a failed answer. The deterministic layer already
         # passed; degrade to that rather than abstaining on an infrastructure error.
@@ -138,6 +164,42 @@ async def verify_node(state: ConversationState) -> dict:
         "verification_notes": notes,
         "timings_ms": {"verify": int((time.perf_counter() - started) * 1000)},
     }
+
+
+def _invented_clauses(answer: str, blocks: list[dict]) -> set[str]:
+    """Clause numbers the answer cites that no retrieved section actually carries.
+
+    Compares against the numbering in each block's ``section_path``, which is the
+    same string the model was shown, so a correct answer can always satisfy it.
+    Returns an empty set when no block carries a section path - there is nothing
+    to check against, and refusing every clause reference in that case would
+    reject correct answers over missing metadata.
+    """
+    cited = set(CLAUSE_REFERENCE.findall(answer))
+    if not cited:
+        return set()
+
+    available: set[str] = set()
+    for block in blocks:
+        if section := block.get("section_path"):
+            available.update(SECTION_NUMBER.findall(str(section)))
+
+    if not available:
+        return set()
+    return cited - available
+
+
+async def _check(
+    instruction: str, context: str, question: str, answer: str
+) -> VerificationResult:
+    return await get_llm().structured(
+        [
+            system(instruction),
+            user(f"{context}\n\nQUESTION: {question}\n\nANSWER: {answer}"),
+        ],
+        VerificationResult,
+        temperature=0.0,
+    )
 
 
 def _reject(notes: list[str], started: float) -> dict:

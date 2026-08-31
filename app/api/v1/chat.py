@@ -18,6 +18,7 @@ import uuid
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, status
+from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
@@ -72,15 +73,59 @@ class ChatResponse(BaseModel):
     query_variants: list[str] = Field(default_factory=list)
     timings_ms: dict[str, int] = Field(default_factory=dict)
     latency_ms: int = 0
+    # The inspection view. The graph has always computed these; they used to die
+    # in the node, which meant a wrong answer could not be told apart from a
+    # wrong *retrieval* without re-running the query by hand. `context_blocks`
+    # is everything that reached the model; `citations` is the subset the model
+    # actually used, so the two together separate the two failure classes.
+    retrieved_chunk_ids: list[str] = Field(default_factory=list)
+    context_blocks: list[dict] = Field(default_factory=list)
+    broadened: bool = False
 
 
-async def _run_graph(question: str, subject, conversation_id: str) -> dict:
+# How many prior messages are replayed into the graph. `condense_node` only reads
+# the last six, so fetching more would cost a wider query for text it discards.
+HISTORY_LIMIT = 6
+
+
+async def _load_history(session: DbSession, conversation_id: str) -> list:
+    """Prior turns of this conversation, oldest first, as LangChain messages.
+
+    Read from Postgres rather than the checkpointer so history survives an API
+    restart and is correct when more than one worker serves the same conversation.
+    Failure is non-fatal: a turn answered without history is worse than one
+    answered with it, but far better than a turn that errors.
+    """
+    try:
+        rows = (
+            await session.scalars(
+                select(Message)
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .where(Conversation.thread_id == conversation_id)
+                .order_by(Message.created_at.desc())
+                .limit(HISTORY_LIMIT)
+            )
+        ).all()
+    except Exception as exc:
+        log.warning("Could not load conversation history", error=str(exc))
+        return []
+
+    return [
+        HumanMessage(content=row.content)
+        if row.role is MessageRole.USER
+        else AIMessage(content=row.content)
+        for row in reversed(rows)
+    ]
+
+
+async def _run_graph(question: str, subject, conversation_id: str, history: list) -> dict:
     graph = get_graph()
     state = initial_state(
         question=question,
         subject=subject,
         conversation_id=conversation_id,
         thread_id=conversation_id,
+        history=history,
     )
     return await graph.ainvoke(state, config={"configurable": {"thread_id": conversation_id}})
 
@@ -152,6 +197,9 @@ def _to_response(conversation_id: str, result: dict, latency_ms: int) -> ChatRes
         query_variants=result.get("query_variants") or [],
         timings_ms=result.get("timings_ms") or {},
         latency_ms=latency_ms,
+        retrieved_chunk_ids=result.get("retrieved_chunk_ids") or [],
+        context_blocks=result.get("context_blocks") or [],
+        broadened=bool(result.get("broadened")),
     )
 
 
@@ -160,8 +208,10 @@ async def chat(payload: ChatRequest, session: DbSession, subject: Subject) -> Ch
     conversation_id = payload.conversation_id or str(uuid.uuid4())
     started = time.perf_counter()
 
+    history = await _load_history(session, conversation_id)
+
     try:
-        result = await _run_graph(payload.message, subject, conversation_id)
+        result = await _run_graph(payload.message, subject, conversation_id, history)
     except Exception as exc:
         log.error("Chat turn failed", error=str(exc))
         raise HTTPException(
@@ -195,6 +245,7 @@ async def chat_stream(
             subject=subject,
             conversation_id=conversation_id,
             thread_id=conversation_id,
+            history=await _load_history(session, conversation_id),
         )
         config = {"configurable": {"thread_id": conversation_id}}
         merged: dict = {}

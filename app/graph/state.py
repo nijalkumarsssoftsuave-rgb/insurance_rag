@@ -98,13 +98,22 @@ def initial_state(
     subject: AuthSubject,
     conversation_id: str,
     thread_id: str,
+    history: list | None = None,
 ) -> ConversationState:
+    """Build the state for one turn.
+
+    ``history`` is the prior turns of this conversation, oldest first. It must be
+    supplied by the caller: no node writes to the ``messages`` channel, so leaving
+    it empty makes every turn look like the first one and ``condense_node`` returns
+    the raw question unchanged - which is how "And what about ICU?" ended up being
+    classified out of scope instead of resolving against the previous answer.
+    """
     return ConversationState(
         subject=subject,
         conversation_id=conversation_id,
         thread_id=thread_id,
         question=question,
-        messages=[],
+        messages=history or [],
         blocked=False,
         abstained=False,
         needs_human=False,

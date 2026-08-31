@@ -85,6 +85,7 @@ async def generate_node(state: ConversationState) -> dict:
     # them is correct, and the masked form only ever existed for the hop through
     # logs and the model.
     answer = _unmask(result.answer, state.get("pii_mapping") or {})
+    answer = _merge_claim_answer(state.get("claim_answer"), answer)
 
     return {
         "answer": answer,
@@ -96,6 +97,23 @@ async def generate_node(state: ConversationState) -> dict:
         "prompt_version": prompt.qualified,
         "timings_ms": {"generate": int((time.perf_counter() - started) * 1000)},
     }
+
+
+def _merge_claim_answer(claim_answer: str | None, clause_answer: str) -> str:
+    """Re-attach the claim status a rejection hand-off left behind.
+
+    `clause_handoff_node` rewrites the question so Lane A can retrieve the clause
+    behind a rejection, and stashes the templated status in `claim_answer`. Without
+    this merge the generated clause explanation simply replaces it, so a customer
+    who asked "what is the status of CLM-2026-0004" was told what clause 4.11 says
+    and never told their claim was rejected, for how much, or what to do next.
+
+    The status goes first because it is what was asked, and it is the half rendered
+    deterministically from the database rather than by a model.
+    """
+    if not claim_answer:
+        return clause_answer
+    return f"{claim_answer}\n\n**Why this was decided**\n\n{clause_answer}"
 
 
 def _unmask(text: str, mapping: dict[str, str]) -> str:

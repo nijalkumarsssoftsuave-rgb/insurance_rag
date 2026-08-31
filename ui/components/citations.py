@@ -61,3 +61,44 @@ def _card(index: int, citation: dict, *, muted: bool = False) -> None:
 def _escape(text: str) -> str:
     """Retrieved document text is untrusted - it must never render as markup."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").strip()
+
+
+def render_inspection(turn: dict) -> None:
+    """The retrieval inspection view: what was fetched, scored and used.
+
+    ``citations`` are the blocks the model actually cited; ``context_blocks`` is
+    everything that reached it. Rendering both side by side is what separates the
+    two failure classes without re-running the query: a missing clause here is a
+    retrieval failure, a clause that is present but uncited is a generation one.
+    """
+    blocks = turn.get("context_blocks") or []
+    if not blocks:
+        return
+
+    cited = {c.get("chunk_id") for c in (turn.get("citations") or [])}
+
+    with st.expander(f"Retrieval detail ({len(blocks)} chunks)", expanded=False):
+        flags = []
+        if turn.get("broadened"):
+            flags.append("retried broadened - the first attempt was gated")
+        if turn.get("below_threshold"):
+            flags.append("below the confidence threshold")
+        if flags:
+            st.caption(" · ".join(flags))
+
+        if variants := turn.get("query_variants"):
+            st.caption("Queries searched: " + " | ".join(variants))
+
+        st.markdown(
+            "| # | used | score | section |\n|---|---|---|---|\n"
+            + "\n".join(
+                f"| {i} | {'yes' if b.get('chunk_id') in cited else 'no'} "
+                f"| {b.get('score', 0):.3f} "
+                f"| {_escape(str(b.get('section_path') or 'unlabelled'))}"
+                f"{' (companion)' if b.get('is_companion') else ''} |"
+                for i, b in enumerate(blocks, start=1)
+            )
+        )
+
+        if timings := turn.get("timings_ms"):
+            st.caption(" · ".join(f"{k} {v}ms" for k, v in timings.items()))

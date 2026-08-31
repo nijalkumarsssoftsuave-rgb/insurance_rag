@@ -21,11 +21,31 @@ from datetime import date
 from app.core.enums import DocType
 from app.graph.state import ConversationState
 from app.logging import get_logger
+from app.retrieval import catalogue
 from app.retrieval.filters import RetrievalFilter
 from app.retrieval.hybrid import get_pipeline
 from app.security.injection import wrap_untrusted
 
 log = get_logger(__name__)
+
+# Document types Lane A will answer from.
+#
+# OTHER is included on purpose. It is the value a document lands on when type
+# detection finds nothing, and leaving it out meant such a document was indexed,
+# embedded, listed in the UI - and then never retrieved. Silent invisibility is
+# the worst failure available here, because every surface reports success.
+# Including it degrades a detection miss to "found, just not type-filtered".
+#
+# CLAIM_FORM is excluded deliberately: a blank claim form carries no policy text
+# worth quoting back to a customer.
+SEARCHABLE_DOC_TYPES: tuple[DocType, ...] = (
+    DocType.POLICY_WORDING,
+    DocType.ENDORSEMENT,
+    DocType.SOP,
+    DocType.CIRCULAR,
+    DocType.BROCHURE,
+    DocType.OTHER,
+)
 
 
 async def retrieve_node(state: ConversationState) -> dict:
@@ -45,17 +65,21 @@ async def retrieve_node(state: ConversationState) -> dict:
     # failure ARCHITECTURE 5.3 describes, and a date filter is the control.
     effective_on = route.get("date_of_loss") or date.today()
 
+    # The router reports the product in the customer's words ("the family health
+    # policy"); the payload stores the catalogue name ("Family Health Optima").
+    # Filtering on the raw string matched zero points and scored 0.0 on every
+    # product-specific question, so the confidence gate fired and the search ran
+    # a second time broadened - two retrievals, neither of them filtered by
+    # product. Resolve it first, and drop it when it cannot be resolved.
+    product = catalogue.resolve(
+        route.get("product_name"), await catalogue.known_products(subject.tenant_id)
+    )
+
     retrieval_filter = RetrievalFilter(
         tenant_id=subject.tenant_id,
-        product_name=route.get("product_name"),
+        product_name=product,
         date_of_loss=effective_on,
-        doc_types=[
-            DocType.POLICY_WORDING,
-            DocType.ENDORSEMENT,
-            DocType.SOP,
-            DocType.CIRCULAR,
-            DocType.BROCHURE,
-        ],
+        doc_types=list(SEARCHABLE_DOC_TYPES),
     )
 
     # Coverage questions force the exclusions and definitions of the matched
@@ -79,6 +103,8 @@ async def retrieve_node(state: ConversationState) -> dict:
         gated=outcome.below_threshold,
         broadened=outcome.broadened,
         coverage=is_coverage,
+        product_asked=route.get("product_name"),
+        product_filter=product,
     )
 
     return {
