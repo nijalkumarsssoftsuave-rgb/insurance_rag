@@ -422,6 +422,14 @@ class Message(UUIDPrimaryKey, Base):
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     input_tokens: Mapped[int | None] = mapped_column(Integer)
     output_tokens: Mapped[int | None] = mapped_column(Integer)
+
+    # Everything else needed to replay this turn from the row alone: the model
+    # parameters, the retrieval filters that were actually applied, the query
+    # variants searched, and every retrieved chunk with its score - not just the
+    # cited ones. `citations` records what the answer used; this records what the
+    # answer *could* have used, which is what tells a retrieval failure apart
+    # from a generation one months later.
+    trace: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

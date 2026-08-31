@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
+from app.config import settings
 from app.core.enums import MessageRole
 from app.db.models import Conversation, Message
 from app.deps import DbSession, Subject
@@ -130,6 +131,73 @@ async def _run_graph(question: str, subject, conversation_id: str, history: list
     return await graph.ainvoke(state, config={"configurable": {"thread_id": conversation_id}})
 
 
+# Bump when the shape below changes, so a replay script can refuse a trace it
+# does not understand rather than silently reconstructing it wrong.
+TRACE_SCHEMA_VERSION = 1
+
+
+def _replay_bundle(result: dict, *, redacted: bool) -> dict:
+    """Everything needed to replay this turn that the columns do not already hold.
+
+    The columns record *what the answer used*: cited chunks, confidence, model.
+    This records *what the answer could have used* and *under what settings* -
+    every retrieved chunk with its score, the filters the router actually
+    applied, the query variants searched, and the decoding parameters. Without
+    the scores, a trace cannot tell a retrieval failure from a generation one,
+    which is the single distinction error analysis is for.
+    """
+    route = result.get("route") or {}
+    intent = result.get("intent")
+    return {
+        "schema_version": TRACE_SCHEMA_VERSION,
+        "llm": {
+            "provider": settings.llm.llm_provider,
+            "model": settings.llm.llm_model,
+            "temperature": settings.llm.llm_temperature,
+            "max_tokens": settings.llm.llm_max_tokens,
+        },
+        "retrieval": {
+            "collection": settings.qdrant.collection,
+            "embedding_model": settings.embedding.model,
+            "reranker_model": settings.reranker.model,
+            "candidates": settings.reranker.candidates,
+            "top_n": settings.reranker.top_n,
+            "score_threshold": settings.reranker.score_threshold,
+            "query_expansion_enabled": settings.retrieval.query_expansion_enabled,
+            "variants": result.get("query_variants") or [],
+            "top_score": result.get("top_score"),
+            "below_threshold": result.get("below_threshold"),
+            "broadened": result.get("broadened"),
+            # Every retrieved block and its score, not just the cited ones.
+            "chunks": result.get("context_blocks") or [],
+        },
+        "router": {
+            "intent": intent.value if hasattr(intent, "value") else intent,
+            "product_name": route.get("product_name"),
+            "claim_number": route.get("claim_number"),
+            "date_of_loss": str(route["date_of_loss"]) if route.get("date_of_loss") else None,
+            "is_coverage_question": route.get("is_coverage_question"),
+        },
+        "guard": {
+            "injection_severity": result.get("injection_severity"),
+            # Placeholder KEYS only - never the mapping's values, which are the
+            # original identifiers this field exists to keep out of the trace.
+            # A bare "redacted: true" would overstate it: the detectors cover
+            # pattern-matchable identifiers (email, phone, PAN, Aadhaar, card,
+            # IFSC, account), and a claimant's *name* is not among them.
+            "pii_placeholders": sorted(result.get("pii_mapping") or {}),
+            "pii_masked_before_write": redacted,
+            "blocked": bool(result.get("blocked")),
+        },
+        "verification": {
+            "verified": result.get("verified"),
+            "notes": result.get("verification_notes") or [],
+            "needs_human": bool(result.get("needs_human")),
+        },
+        "timings_ms": result.get("timings_ms") or {},
+    }
+
+
 async def _persist(
     session: DbSession,
     *,
@@ -140,8 +208,20 @@ async def _persist(
     latency_ms: int,
 ) -> None:
     """Record the turn. Never raises - a failed audit write must not lose the
-    answer the customer already has, but it is logged loudly."""
+    answer the customer already has, but it is logged loudly.
+
+    What is written is the **masked** question, not the raw one. `guard_node`
+    produces `masked_question` for logs and traces, but this function used to
+    persist `question` - so the one copy that outlived the request was the
+    unredacted one. Redaction has to happen before the write, not after.
+    """
     try:
+        # Never fall back to the raw question: an empty masked value means the
+        # guard did not run, and writing the raw text "just this once" is how an
+        # audit trail quietly becomes a PII store.
+        stored_question = result.get("masked_question") or question
+        redacted = bool(result.get("pii_mapping"))
+
         conversation = await session.scalar(
             select(Conversation).where(Conversation.thread_id == conversation_id)
         )
@@ -149,7 +229,7 @@ async def _persist(
             conversation = Conversation(
                 tenant_id=subject.tenant_id,
                 thread_id=conversation_id,
-                title=question[:200],
+                title=stored_question[:200],
             )
             session.add(conversation)
             await session.flush()
@@ -158,7 +238,7 @@ async def _persist(
             Message(
                 conversation_id=conversation.id,
                 role=MessageRole.USER,
-                content=question,
+                content=stored_question,
             )
         )
         session.add(
@@ -174,6 +254,9 @@ async def _persist(
                 confidence=result.get("confidence", 0.0),
                 abstained=bool(result.get("abstained")),
                 latency_ms=latency_ms,
+                input_tokens=result.get("input_tokens"),
+                output_tokens=result.get("output_tokens"),
+                trace=_replay_bundle(result, redacted=redacted),
             )
         )
         await session.commit()

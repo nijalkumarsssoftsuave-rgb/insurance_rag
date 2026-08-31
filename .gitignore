@@ -33,3 +33,5 @@ eval/reports/
 .vscode/
 .DS_Store
 Thumbs.db
+
+tasks/

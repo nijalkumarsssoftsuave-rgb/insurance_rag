@@ -189,3 +189,34 @@ def test_noop_reranker_preserves_retrieval_order() -> None:
     ranked = NoOpReranker().rerank("q", hits, top_n=3)
     assert [r.chunk_id for r in ranked] == ["a", "b", "c"]
     assert all(isinstance(r, RerankedHit) for r in ranked)
+
+
+def test_mmr_lambda_one_is_pure_relevance() -> None:
+    """The identity case. If this drifts, every MMR measurement is meaningless."""
+    from app.retrieval.fusion import mmr
+
+    scores = [0.9, 0.8, 0.7]
+    sim = [[1.0, 0.99, 0.1], [0.99, 1.0, 0.1], [0.1, 0.1, 1.0]]
+    assert mmr(scores, sim, lambda_=1.0) == [0, 1, 2]
+
+
+def test_mmr_demotes_a_near_duplicate() -> None:
+    """Candidate 1 is near-identical to the winner, candidate 2 is not.
+
+    This is the behaviour that costs a real question on the golden set: the
+    demoted duplicate is sometimes the clause that actually answers the query.
+    """
+    from app.retrieval.fusion import mmr
+
+    scores = [0.9, 0.8, 0.7]
+    sim = [[1.0, 0.99, 0.1], [0.99, 1.0, 0.1], [0.1, 0.1, 1.0]]
+    assert mmr(scores, sim, lambda_=0.5) == [0, 2, 1]
+
+
+def test_mmr_handles_empty_and_limit() -> None:
+    from app.retrieval.fusion import mmr
+
+    assert mmr([], []) == []
+    scores = [0.9, 0.8, 0.7]
+    sim = [[1.0, 0.99, 0.1], [0.99, 1.0, 0.1], [0.1, 0.1, 1.0]]
+    assert mmr(scores, sim, lambda_=0.5, limit=2) == [0, 2]

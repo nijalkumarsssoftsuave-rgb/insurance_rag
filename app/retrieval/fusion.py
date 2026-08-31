@@ -80,3 +80,42 @@ def merge_preserving_priority(
             out.append(hit)
             known.add(hit.chunk_id)
     return out[:limit] if limit else out
+
+
+def mmr(
+    scores: Sequence[float],
+    similarity: Sequence[Sequence[float]],
+    *,
+    lambda_: float = 0.7,
+    limit: int | None = None,
+) -> list[int]:
+    """Maximal Marginal Relevance over an already-scored candidate list.
+
+    Returns candidate indices in selection order, greedily maximising
+    ``lambda_ * relevance - (1 - lambda_) * max_similarity_to_already_selected``.
+    ``lambda_ = 1.0`` is pure relevance and reproduces the input order.
+
+    Diversity is not free in insurance retrieval, which is why this is not wired
+    into the default path. Three chunks of the *same* clause across three form
+    editions look redundant to MMR, but only one of them is in force on the date
+    of loss - so demoting duplicates can demote the correct edition. Measured
+    effect on the golden set is in ``eval/RESULTS.md``; it is off by default.
+    """
+    n = len(scores)
+    if n == 0:
+        return []
+    limit = min(limit or n, n)
+    remaining = set(range(n))
+    first = max(remaining, key=lambda i: scores[i])
+    selected = [first]
+    remaining.discard(first)
+
+    while remaining and len(selected) < limit:
+        best = max(
+            remaining,
+            key=lambda i: lambda_ * scores[i]
+            - (1.0 - lambda_) * max(similarity[i][j] for j in selected),
+        )
+        selected.append(best)
+        remaining.discard(best)
+    return selected
