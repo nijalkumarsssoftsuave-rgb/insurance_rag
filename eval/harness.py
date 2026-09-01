@@ -35,13 +35,14 @@ from app.config import settings
 from app.core.enums import DocType
 from app.retrieval import filters
 from app.retrieval.hybrid import RetrievalPipeline
-from eval.metrics import retrieval as M
+from eval.metrics import retrieval as M  # noqa: N812 - reads as a metrics namespace at call sites
 
 GOLDEN = Path("eval/golden/questions.jsonl")
 
 
 def load(path: Path) -> list[dict[str, Any]]:
-    rows = [json.loads(line) for line in path.read_text(encoding="utf8").splitlines() if line.strip()]
+    lines = path.read_text(encoding="utf8").splitlines()
+    rows = [json.loads(line) for line in lines if line.strip()]
     ids = [r["id"] for r in rows]
     if len(set(ids)) != len(ids):
         raise ValueError("duplicate question ids in the golden set")
@@ -63,7 +64,8 @@ def build_filter(spec: dict[str, Any]) -> filters.RetrievalFilter:
 
 
 async def run_one(pipeline: RetrievalPipeline, row: dict[str, Any], k: int) -> dict[str, Any]:
-    outcome = await pipeline.retrieve(row["question"], retrieval_filter=build_filter(row.get("filters", {})))
+    rf = build_filter(row.get("filters", {}))
+    outcome = await pipeline.retrieve(row["question"], retrieval_filter=rf)
     payloads = [h.hit.payload for h in outcome.ranked]
     labels = row.get("relevant_sections", [])
     ranks = M.relevant_ranks(payloads, labels)

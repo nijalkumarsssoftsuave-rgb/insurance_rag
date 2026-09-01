@@ -19,7 +19,9 @@ def hit(**payload) -> SearchHit:
 
 
 def test_both_fields_present() -> None:
-    out = pair_text(hit(**{Payload.PRODUCT_NAME: "Motor Shield", Payload.SECTION_PATH: "SECTION 4 - NCB"}))
+    out = pair_text(
+        hit(**{Payload.PRODUCT_NAME: "Motor Shield", Payload.SECTION_PATH: "SECTION 4 - NCB"})
+    )
     assert out.splitlines() == ["Motor Shield | SECTION 4 - NCB", TABLE]
 
 
@@ -30,7 +32,10 @@ def test_no_product_name_leaves_no_stray_separator() -> None:
 
 
 def test_no_section_path() -> None:
-    assert pair_text(hit(**{Payload.PRODUCT_NAME: "Motor Shield"})).splitlines() == ["Motor Shield", TABLE]
+    assert pair_text(hit(**{Payload.PRODUCT_NAME: "Motor Shield"})).splitlines() == [
+        "Motor Shield",
+        TABLE,
+    ]
 
 
 def test_neither_field_falls_back_to_bare_text() -> None:
@@ -40,6 +45,10 @@ def test_neither_field_falls_back_to_bare_text() -> None:
 
 def test_chunk_text_is_never_dropped() -> None:
     """Whatever the prefix does, the retrieved text must still be in there."""
-    for payload in ({}, {Payload.PRODUCT_NAME: "X"}, {Payload.SECTION_PATH: "Y"},
-                    {Payload.PRODUCT_NAME: "X", Payload.SECTION_PATH: "Y"}):
+    for payload in (
+        {},
+        {Payload.PRODUCT_NAME: "X"},
+        {Payload.SECTION_PATH: "Y"},
+        {Payload.PRODUCT_NAME: "X", Payload.SECTION_PATH: "Y"},
+    ):
         assert TABLE in pair_text(hit(**payload))

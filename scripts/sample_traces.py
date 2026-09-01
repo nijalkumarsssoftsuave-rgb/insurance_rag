@@ -22,7 +22,6 @@ import argparse
 import json
 import random
 import sys
-from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -98,27 +97,33 @@ def main() -> int:
         raise SystemExit("empty sampling frame - check --before/--after")
 
     n = min(args.n, len(frame))
-    drawn = random.Random(args.seed).sample(frame, n)
+    # S311: a seeded PRNG is the point - the sample must be redrawable from the
+    # seed alone. Cryptographic randomness would make it unreproducible.
+    drawn = random.Random(args.seed).sample(frame, n)  # noqa: S311
     drawn.sort(key=lambda r: r["created_at"])
 
     distinct_questions = len({r["question"] for r in drawn})
     print(f"seed        : {args.seed}")
-    print(f"frame       : {len(frame)} assistant turns"
-          f"{f', before {args.before}' if args.before else ''}"
-          f"{f', after {args.after}' if args.after else ''}")
+    print(
+        f"frame       : {len(frame)} assistant turns"
+        f"{f', before {args.before}' if args.before else ''}"
+        f"{f', after {args.after}' if args.after else ''}"
+    )
     print(f"frame distinct questions : {len({r['question'] for r in frame})}")
     print(f"drawn       : {n}")
     # A sample of 20 that collapses onto 4 questions has 20 traces and 4
     # behaviours; the frequencies in any taxonomy built on it would be fiction.
     print(f"drawn distinct questions : {distinct_questions}")
     print()
-    print(f"| # | trace_id | when | intent | abstained | question |")
-    print(f"|---|---|---|---|---|---|")
+    print("| # | trace_id | when | intent | abstained | question |")
+    print("|---|---|---|---|---|---|")
     for i, r in enumerate(drawn, 1):
         q = (r["question"] or "").replace("|", "\\|")[:58]
         when = r["created_at"].strftime("%m-%d %H:%M")
-        print(f"| {i} | `{r['trace_id']}` | {when} | {r['intent'] or '-'} "
-              f"| {'yes' if r['abstained'] else 'no'} | {q} |")
+        print(
+            f"| {i} | `{r['trace_id']}` | {when} | {r['intent'] or '-'} "
+            f"| {'yes' if r['abstained'] else 'no'} | {q} |"
+        )
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

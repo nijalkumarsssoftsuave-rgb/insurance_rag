@@ -124,7 +124,12 @@ def main() -> int:
     print(f"recorded at     : {row['created_at']}")
     print(f"question        : {row['question']}")
     print(f"model / prompt  : {row['model']} / {row['prompt_version']}")
-    print(f"trace bundle    : {'present (v%s)' % row['trace'].get('schema_version') if row['trace'] else 'ABSENT - written before the trace column existed'}")
+    bundle = (
+        f"present (v{row['trace'].get('schema_version')})"
+        if row["trace"]
+        else "ABSENT - written before the trace column existed"
+    )
+    print(f"trace bundle    : {bundle}")
     print(f"unreconstructable fields ({len(missing)}): {', '.join(missing) if missing else 'none'}")
 
     replayed = asyncio.run(replay(row, args.retrieval_only))
@@ -133,7 +138,8 @@ def main() -> int:
     print("ORIGINAL")
     print("=" * 78)
     print(f"  top_score : {((row['trace'] or {}).get('retrieval') or {}).get('top_score')}")
-    print(f"  chunks    : {len(row['retrieved_chunk_ids'] or [])} -> {(row['retrieved_chunk_ids'] or [])[:3]}")
+    orig_ids = row["retrieved_chunk_ids"] or []
+    print(f"  chunks    : {len(orig_ids)} -> {orig_ids[:3]}")
     print(f"  answer    : {(row['answer'] or '')[:400]}")
 
     print("\n" + "=" * 78)
@@ -145,11 +151,15 @@ def main() -> int:
     if replayed["answer"] is not None:
         print(f"  answer    : {replayed['answer'][:400]}")
 
-    same_chunks = set(row["retrieved_chunk_ids"] or []) & set(replayed["chunk_ids"])
+    same = set(orig_ids) & set(replayed["chunk_ids"])
     print("\n" + "-" * 78)
-    print(f"chunk overlap   : {len(same_chunks)} of {len(row['retrieved_chunk_ids'] or [])} original ids also retrieved on replay")
-    if row["prompt_version"] and replayed.get("replayed_prompt_version") not in (None, row["prompt_version"]):
-        print(f"prompt drift    : recorded {row['prompt_version']}, replayed {replayed['replayed_prompt_version']}")
+    print(f"chunk overlap   : {len(same)} of {len(orig_ids)} original ids retrieved again")
+    if row["prompt_version"] and replayed.get("replayed_prompt_version") not in (
+        None,
+        row["prompt_version"],
+    ):
+        replayed_v = replayed["replayed_prompt_version"]
+        print(f"prompt drift    : recorded {row['prompt_version']}, replayed {replayed_v}")
     print(json.dumps({"trace_id": row["trace_id"], "unreconstructable": missing}, indent=0))
     return 0
 

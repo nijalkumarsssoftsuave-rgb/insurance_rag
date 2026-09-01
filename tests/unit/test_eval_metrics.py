@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from eval.harness import build_filter, load
-from eval.metrics import retrieval as M
+from eval.metrics import retrieval as M  # noqa: N812 - metrics namespace
 
 V32 = {"doc_type": "policy_wording", "effective_from": "2026-04-01"}
 LABEL = V32 | {"section_path": "SECTION 4 - EXCLUSIONS > 4.11"}
@@ -30,12 +30,18 @@ def test_wrong_section_does_not_match() -> None:
 
 def test_wrong_document_version_does_not_match() -> None:
     """The whole point of date-of-loss filtering: v2.8 must not satisfy a v3.2 label."""
-    assert not M.matches(_chunk("SECTION 4 - EXCLUSIONS > 4.11 Dental", effective_from="2024-04-01"), LABEL)
+    assert not M.matches(
+        _chunk("SECTION 4 - EXCLUSIONS > 4.11 Dental", effective_from="2024-04-01"), LABEL
+    )
 
 
 def test_hit_rate_respects_k() -> None:
-    payloads = [_chunk("SECTION 1 - DEFINITIONS"), _chunk("SECTION 2 - SCOPE OF COVER"),
-                _chunk("SECTION 3 - BENEFITS"), _chunk("SECTION 4 - EXCLUSIONS > 4.11 Dental")]
+    payloads = [
+        _chunk("SECTION 1 - DEFINITIONS"),
+        _chunk("SECTION 2 - SCOPE OF COVER"),
+        _chunk("SECTION 3 - BENEFITS"),
+        _chunk("SECTION 4 - EXCLUSIONS > 4.11 Dental"),
+    ]
     ranks = M.relevant_ranks(payloads, [LABEL])
     assert ranks == [3]
     assert M.hit_rate_at_k(ranks, 3) == 0.0  # rank 4 is outside the top 3

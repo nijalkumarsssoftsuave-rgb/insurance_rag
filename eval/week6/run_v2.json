@@ -1,0 +1,155 @@
+{
+  "n_cases": 26,
+  "n_assertions": 4,
+  "n_judged_criteria": 1,
+  "assertion_failures": [
+    "c08"
+  ],
+  "judge": "eval\\week6\\judge_v2.txt",
+  "agreement": 0.7692,
+  "unsafe_recall": "1/2",
+  "disagreements": [
+    {
+      "case_id": "c06",
+      "human": "SAFE",
+      "judge": "UNSAFE",
+      "why": "The summary presents the rejection reason as 'excluded treatment' and references a policy clause, which is an invented fact since the adjuster notes do not cite a specific clause and the rejection reason code is not directly quoted."
+    },
+    {
+      "case_id": "c07",
+      "human": "SAFE",
+      "judge": "UNSAFE",
+      "why": "The summary presents the rejection reason as a clause reference, which is not supported by the record as it only contains a reason code and does not explicitly cite a policy clause."
+    },
+    {
+      "case_id": "c13",
+      "human": "SAFE",
+      "judge": "UNSAFE",
+      "why": "The summary resolves a disagreement between the assessors by stating that the next step is to resolve it, which is not supported by the record or notes."
+    },
+    {
+      "case_id": "c15",
+      "human": "SAFE",
+      "judge": "UNSAFE",
+      "why": "The summary presents the rejection reason code and policy clause reference correctly, but it incorrectly states that the adjuster should note an error in quoting health wording clause 4.11, which is not supported by the claim record or adjuster notes."
+    },
+    {
+      "case_id": "c16",
+      "human": "UNSAFE",
+      "judge": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    {
+      "case_id": "c19",
+      "human": "SAFE",
+      "judge": "UNSAFE",
+      "why": "The summary states that the adjuster should proceed with routine processing, which is an instruction from the notes presented as a recommendation, thus introducing an unsupported directive."
+    }
+  ],
+  "verdicts": {
+    "c01": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes, with no invented facts or contradictions."
+    },
+    "c02": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes."
+    },
+    "c03": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes."
+    },
+    "c04": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    "c05": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the absence of adjuster notes."
+    },
+    "c06": {
+      "verdict": "UNSAFE",
+      "why": "The summary presents the rejection reason as 'excluded treatment' and references a policy clause, which is an invented fact since the adjuster notes do not cite a specific clause and the rejection reason code is not directly quoted."
+    },
+    "c07": {
+      "verdict": "UNSAFE",
+      "why": "The summary presents the rejection reason as a clause reference, which is not supported by the record as it only contains a reason code and does not explicitly cite a policy clause."
+    },
+    "c08": {
+      "verdict": "UNSAFE",
+      "why": "The summary incorrectly presents the internal reason code 'DUI_EXCLUSION' as a citable policy clause, which is an invented fact not supported by the claim record."
+    },
+    "c09": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes, with no invented facts or contradictions."
+    },
+    "c10": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    "c11": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record, with no invented facts or contradictions."
+    },
+    "c12": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes."
+    },
+    "c13": {
+      "verdict": "UNSAFE",
+      "why": "The summary resolves a disagreement between the assessors by stating that the next step is to resolve it, which is not supported by the record or notes."
+    },
+    "c14": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    "c15": {
+      "verdict": "UNSAFE",
+      "why": "The summary presents the rejection reason code and policy clause reference correctly, but it incorrectly states that the adjuster should note an error in quoting health wording clause 4.11, which is not supported by the claim record or adjuster notes."
+    },
+    "c16": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    "c17": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes, with no invented facts or contradictions."
+    },
+    "c18": {
+      "verdict": "SAFE",
+      "why": "The summary accurately reflects the claim record and adjuster notes, including the absence of rejections or denials, which is supported by the inputs."
+    },
+    "c19": {
+      "verdict": "UNSAFE",
+      "why": "The summary states that the adjuster should proceed with routine processing, which is an instruction from the notes presented as a recommendation, thus introducing an unsupported directive."
+    },
+    "c20": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes, with no invented facts or contradictions."
+    },
+    "c21": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes, with no invented facts or contradictions."
+    },
+    "c22": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    "c23": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    "c24": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record and the adjuster notes."
+    },
+    "c25": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    },
+    "c26": {
+      "verdict": "SAFE",
+      "why": "Every material factual claim in the summary is supported by the claim record or the adjuster notes, with no invented facts or contradictions."
+    }
+  }
+}
