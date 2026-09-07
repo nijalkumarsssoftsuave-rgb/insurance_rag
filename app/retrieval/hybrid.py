@@ -226,21 +226,21 @@ class RetrievalPipeline:
 
         A rejection carries a clause reference, so this is a filter hit rather
         than a similarity search - the exact clause is known.
+
+        Built on ``filters.build(rf)`` rather than a hand-rolled filter: an
+        earlier version only matched tenant + section path, silently dropping
+        ``rf.product_name`` and ``rf.date_of_loss``. Two non-superseded wordings
+        of the *same* clause 4.11 exist a claim apart (dental exclusion tightened
+        2026-04-01), each valid only in its own effective window, and an
+        unfiltered scroll can return either one - the exact ARCHITECTURE 5.3
+        failure the main ``retrieve()`` path filters against, reintroduced here
+        because this method never went through the same filter builder.
         """
         from qdrant_client import models
 
-        query_filter = models.Filter(
-            must=[
-                models.FieldCondition(
-                    key=Payload.TENANT_ID, match=models.MatchValue(value=rf.tenant_id)
-                ),
-                models.FieldCondition(
-                    key=Payload.SECTION_PATH, match=models.MatchText(text=clause_ref)
-                ),
-                models.FieldCondition(
-                    key=Payload.IS_SUPERSEDED, match=models.MatchValue(value=False)
-                ),
-            ]
+        query_filter = filters.build(rf)
+        query_filter.must.append(
+            models.FieldCondition(key=Payload.SECTION_PATH, match=models.MatchText(text=clause_ref))
         )
         return await asyncio.to_thread(self.store.scroll_by_filter, query_filter, limit=5)
 

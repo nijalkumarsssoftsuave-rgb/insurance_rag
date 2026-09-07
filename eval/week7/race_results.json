@@ -1,0 +1,204 @@
+[
+  {
+    "claim_number": "CLM-2026-0001",
+    "fixed": {
+      "answer": "Claim CLM-2026-0001 (Family Health Optima): settled. Latest note (07 Jun 2026): Amount settled directly with the network hospital",
+      "wall_ms": 13,
+      "tool_calls": 2,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    },
+    "agent": {
+      "answer": "Claim number CLM-2026-0001 is settled. The date of loss was May 2, 2026.",
+      "wall_ms": 4992,
+      "tool_calls": 1,
+      "llm_calls": 2,
+      "input_tokens": 941,
+      "output_tokens": 116,
+      "stop_reason": "finished",
+      "steps": [
+        {
+          "action": "get_claim_status",
+          "action_input": {
+            "claim_number": "CLM-2026-0001"
+          },
+          "ok": true
+        }
+      ],
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    }
+  },
+  {
+    "claim_number": "CLM-2026-0002",
+    "fixed": {
+      "answer": "Claim CLM-2026-0002 (Family Health Optima): under_review. Latest note (17 Aug 2026): Assigned to claims assessor for medical review",
+      "wall_ms": 14,
+      "tool_calls": 2,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    },
+    "agent": {
+      "answer": "Claim number CLM-2026-0002 is currently under review. The date of loss is July 18, 2026. A reimbursement claim was submitted online on August 14, 2026, and it has been assigned to a claims assessor for medical review as of August 17, 2026.",
+      "wall_ms": 3654,
+      "tool_calls": 2,
+      "llm_calls": 3,
+      "input_tokens": 1490,
+      "output_tokens": 201,
+      "stop_reason": "finished",
+      "steps": [
+        {
+          "action": "get_claim_status",
+          "action_input": {
+            "claim_number": "CLM-2026-0002"
+          },
+          "ok": true
+        },
+        {
+          "action": "get_claim_notes",
+          "action_input": {
+            "claim_number": "CLM-2026-0002"
+          },
+          "ok": true
+        }
+      ],
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    }
+  },
+  {
+    "claim_number": "CLM-2026-0003",
+    "fixed": {
+      "answer": "Claim CLM-2026-0003 (Family Health Optima): info_required. Latest note (19 Jul 2026): Please upload the discharge summary and the original pharmacy bills",
+      "wall_ms": 10,
+      "tool_calls": 2,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    },
+    "agent": {
+      "answer": "Claim number CLM-2026-0003 is currently in 'info_required' status. The date of loss is June 9, 2026. The adjuster needs to obtain the discharge summary and original pharmacy bills to proceed with the claim.",
+      "wall_ms": 3782,
+      "tool_calls": 2,
+      "llm_calls": 3,
+      "input_tokens": 1493,
+      "output_tokens": 195,
+      "stop_reason": "finished",
+      "steps": [
+        {
+          "action": "get_claim_status",
+          "action_input": {
+            "claim_number": "CLM-2026-0003"
+          },
+          "ok": true
+        },
+        {
+          "action": "get_claim_notes",
+          "action_input": {
+            "claim_number": "CLM-2026-0003"
+          },
+          "ok": true
+        }
+      ],
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    }
+  },
+  {
+    "claim_number": "CLM-2026-0004",
+    "fixed": {
+      "answer": "Claim CLM-2026-0004 (Family Health Optima): rejected. Rejected under clause 4.11 (excluded treatment). Clause text: Dental  treatment,  dental  surgery  and  orthodontic  procedures  of  any  kind  are  excluded  from  the  scope  of  this Policy.  This  exclusion  shall  not  apply  where  such  treatment  is  necessitated  by  an  accident  and  requires hospitalisation  for  at  least  twenty-four  consecutive  hours.  Routine  dental  check-ups,  scaling,  polishing  and cosmetic dentistry are never payable Latest note (01 Jul 2026): Rejected under the dental treatment exclusion",
+      "wall_ms": 407,
+      "tool_calls": 3,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    },
+    "agent": {
+      "answer": "Claim number CLM-2026-0004 is rejected. The date of loss was May 27, 2026, due to excluded treatment as per clause 4.11, which states that dental treatment and procedures are not covered unless necessitated by an accident requiring hospitalization for at least 24 hours.",
+      "wall_ms": 3486,
+      "tool_calls": 2,
+      "llm_calls": 3,
+      "input_tokens": 1656,
+      "output_tokens": 201,
+      "stop_reason": "finished",
+      "steps": [
+        {
+          "action": "get_claim_status",
+          "action_input": {
+            "claim_number": "CLM-2026-0004"
+          },
+          "ok": true
+        },
+        {
+          "action": "search_policy_clause",
+          "action_input": {
+            "clause_ref": "4.11",
+            "product_name": "Family Health Optima",
+            "date_of_loss": "2026-05-27"
+          },
+          "ok": true
+        }
+      ],
+      "checks": {
+        "claim_number_echoed": true,
+        "denial_cites_clause": true
+      }
+    }
+  },
+  {
+    "claim_number": "CLM-9999-9999",
+    "fixed": {
+      "answer": "No claim found for 'CLM-9999-9999'.",
+      "wall_ms": 2,
+      "tool_calls": 1,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "checks": {}
+    },
+    "agent": {
+      "answer": "No claim found for CLM-9999-9999.",
+      "wall_ms": 2285,
+      "tool_calls": 1,
+      "llm_calls": 2,
+      "input_tokens": 925,
+      "output_tokens": 100,
+      "stop_reason": "finished",
+      "steps": [
+        {
+          "action": "get_claim_status",
+          "action_input": {
+            "claim_number": "CLM-9999-9999"
+          },
+          "ok": false
+        }
+      ],
+      "checks": {}
+    }
+  }
+]
