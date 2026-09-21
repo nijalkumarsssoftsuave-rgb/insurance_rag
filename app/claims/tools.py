@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.claims import repository
 from app.core.enums import ClaimStatus
+from app.retrieval import catalogue
 from app.retrieval.filters import RetrievalFilter
 from app.retrieval.hybrid import get_pipeline
 from app.security.authz import AuthSubject
@@ -92,12 +93,25 @@ async def search_policy_clause(
     effective window. Without the date filter the wrong one can come back - see
     the fix in ``retrieve_by_clause`` (ARCHITECTURE 5.3). Callers should pass the
     claim's own date of loss, not let the model guess one.
+
+    ``product_name`` is resolved through ``catalogue.resolve`` before it becomes
+    a filter, exactly like ``app/graph/nodes/retrieve.py`` already does for Lane
+    A. Found the hard way (Week 8): a fresh re-ingestion re-ran the LLM metadata
+    pass, which named this product "Family Health Optima Insurance Plan" in the
+    payload - the claim record still says "Family Health Optima", an exact-match
+    filter on the unresolved string silently returned zero hits, and this tool
+    reported a real clause as "not found in the policy wording". An unresolvable
+    guess is dropped rather than applied (`resolve()`'s own contract): a wrong
+    filter hides the clause, no filter just widens the candidate pool.
     """
     if not clause_ref:
         return ToolResult(ok=False, observation="No clause reference given to search for.")
 
+    resolved_product = catalogue.resolve(
+        product_name, await catalogue.known_products(subject.tenant_id)
+    )
     rf = RetrievalFilter(
-        tenant_id=subject.tenant_id, product_name=product_name, date_of_loss=date_of_loss
+        tenant_id=subject.tenant_id, product_name=resolved_product, date_of_loss=date_of_loss
     )
     hits = await get_pipeline().retrieve_by_clause(clause_ref, rf)
     if not hits:
@@ -113,19 +127,23 @@ async def search_policy_clause(
     return ToolResult(ok=True, observation=f"Clause {clause_ref}: {snippet}", data={"text": text})
 
 
+# `get_claim_status` is the only entry left. `get_claim_notes` and
+# `search_policy_clause` are deliberately absent - both turned out to be
+# mechanical, not judgment calls: the fixed sequence in app/claims/handover.py
+# already calls `get_claim_notes` unconditionally and calls
+# `search_policy_clause` exactly when the fetched claim is REJECTED with a
+# `rejection_clause_ref`, neither of which needs a model to decide. Week 8's
+# trajectory eval found the model skipped `get_claim_notes` in 10/20 real
+# runs while still passing outcome assertions - and then, once notes-fetching
+# became automatic, skipped `search_policy_clause` in 4/5 runs on the one
+# claim that needs it (was 0/5 before), because the auto-fetched note already
+# repeated the rejection reason and the model judged that "enough". Both are
+# now auto-called by app/agents/claim_handover_agent.py right after a
+# successful get_claim_status, instead of left in the model's menu.
 TOOL_SPECS: dict[str, str] = {
     "get_claim_status": (
         "Look up one claim's status, dates and (if rejected) its reason code and "
         "clause reference. Args: {\"claim_number\": \"CLM-2026-0004\"}."
-    ),
-    "get_claim_notes": (
-        "Fetch the adjuster's working notes for one claim, newest first. "
-        "Args: {\"claim_number\": \"CLM-2026-0004\"}."
-    ),
-    "search_policy_clause": (
-        "Fetch the exact wording of one policy clause by its reference number - "
-        "use this to explain *why* a claim was rejected. "
-        "Args: {\"clause_ref\": \"4.11\", \"product_name\": \"Family Health Optima\"}."
     ),
 }
 

@@ -1,0 +1,470 @@
+{
+  "summary": {
+    "n_runs": 20,
+    "outcome_pass_rate": 1.0,
+    "trajectory_complete_rate": 1.0,
+    "outcome_pass_trajectory_incomplete_rate": 0.0,
+    "outcome_pass_trajectory_incomplete_count": 0,
+    "cost_tokens_mean": 1199.05,
+    "cost_tokens_p99": 1360.62,
+    "wall_ms_mean": 2812.7,
+    "wall_ms_p99": 5451.01
+  },
+  "runs": [
+    {
+      "claim_number": "CLM-2026-0001",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 5987,
+      "total_tokens": 1158,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0001",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2663,
+      "total_tokens": 1134,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0001",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2925,
+      "total_tokens": 1158,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0001",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2619,
+      "total_tokens": 1148,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0001",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2281,
+      "total_tokens": 1134,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0002",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2949,
+      "total_tokens": 1159,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0002",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2264,
+      "total_tokens": 1154,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0002",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2735,
+      "total_tokens": 1157,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0002",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2451,
+      "total_tokens": 1154,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0002",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2496,
+      "total_tokens": 1143,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0003",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2552,
+      "total_tokens": 1152,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0003",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2630,
+      "total_tokens": 1142,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0003",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2414,
+      "total_tokens": 1135,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0003",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2825,
+      "total_tokens": 1141,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0003",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 3166,
+      "total_tokens": 1140,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0004",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2851,
+      "total_tokens": 1347,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0004",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2496,
+      "total_tokens": 1358,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0004",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2430,
+      "total_tokens": 1347,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0004",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2690,
+      "total_tokens": 1361,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    },
+    {
+      "claim_number": "CLM-2026-0004",
+      "expected_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "called_tools_ok": [
+        "get_claim_notes",
+        "get_claim_status",
+        "search_policy_clause"
+      ],
+      "outcome_pass": true,
+      "trajectory_complete": true,
+      "outcome_pass_trajectory_incomplete": false,
+      "wall_ms": 2830,
+      "total_tokens": 1359,
+      "llm_calls": 2,
+      "stop_reason": "finished"
+    }
+  ]
+}

@@ -21,15 +21,18 @@ store) - out of scope for a single investigate-and-report task.
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.claims.tools import TOOL_SPECS, ToolResult, run_tool
+from app.core.enums import ClaimStatus
 from app.llm import get_llm, system, user
 from app.logging import get_logger
 from app.prompts import registry
+from app.security import injection
 from app.security.authz import AuthSubject
 
 log = get_logger(__name__)
@@ -38,6 +41,33 @@ log = get_logger(__name__)
 MAX_STEPS = 6
 MAX_SECONDS = 20.0
 MAX_TOTAL_TOKENS = 4000
+
+# Tools whose observation is free text from a source the agent does not
+# control (adjuster notes, policy clause wording) rather than rendered from
+# typed DB fields. `get_claim_status`'s observation is built from a status
+# enum, dates and a closed set of reason codes - there is nothing there for
+# an attacker to write. These two are where Week 8's injection attack landed
+# (a fabricated "corrected to APPROVED" note via `get_claim_notes`, 10/10
+# trials), so they get scanned for telemetry and fenced before re-entering
+# the transcript; `get_claim_status` does not need either.
+_UNTRUSTED_CONTENT_TOOLS = frozenset({"get_claim_notes", "search_policy_clause"})
+
+# Output validation, the layer that turned out to matter. Week 8's injection
+# attack (a fabricated "Claims Supervisor correction" note) beat the fence and
+# the prompt's explicit warning 10/10 times - the model is not structurally
+# unable to be talked into this, only discouraged, and discouragement did not
+# hold. This regex is the deterministic backstop: it does not ask the model to
+# resist anything, it checks the model's own claim against the status
+# `get_claim_status` actually observed, the same way `date_of_loss` was never
+# trusted from the model either. Deliberately narrow (rejected -> approved
+# only, not a general fact-checker) - see RESULTS.md for what this does not
+# cover.
+APPROVAL_STATUS_RE = re.compile(
+    r"\b(now\s+approved|corrected\s+to\s+approved|reclassif\w*\s+.{0,20}\bapproved\b|"
+    r"is\s+approved|has\s+been\s+approved|approved\s+in\s+full|"
+    r"approved\s+for\s+the\s+full\s+amount)\b",
+    re.I,
+)
 
 
 @dataclass(slots=True)
@@ -52,6 +82,13 @@ class StepLog:
 @dataclass(slots=True)
 class AgentResult:
     answer: str
+    # What the model actually wrote, before any output-validation override.
+    # Equal to `answer` unless `output_overridden` is True - kept so a caller
+    # can measure what the model itself did versus what actually shipped,
+    # rather than only the post-override number (which would be tautological:
+    # an override that neutralizes X by construction cannot report X).
+    raw_answer: str = ""
+    output_overridden: bool = False
     steps: list[StepLog] = field(default_factory=list)
     stop_reason: str = "finished"
     elapsed_ms: int = 0
@@ -93,6 +130,42 @@ async def run(session: AsyncSession, subject: AuthSubject, claim_number: str) ->
     # (ARCHITECTURE 5.3), so it gets the same "never from the model, and never
     # silently absent" treatment `subject` gets everywhere else in app/claims.
     memory: dict[str, object] = {}
+
+    def _transcript_observation(action_name: str, observation: str) -> str:
+        """What the model sees for this tool's result - fenced and labelled
+        DATA if the content is untrusted free text, verbatim otherwise.
+
+        `result.steps` (and every eval script reading it) keeps the raw text;
+        only what re-enters the prompt is fenced - wrapping the eval record
+        too would make the transcript unreadable in `race.py`/`trajectory.py`
+        output for no security benefit, since nothing there re-feeds an LLM.
+        """
+        if action_name not in _UNTRUSTED_CONTENT_TOOLS:
+            return observation
+        verdict = injection.scan(observation)
+        if verdict.suspicious:
+            log.warning(
+                "Tool observation flagged by injection scan",
+                claim_number=claim_number,
+                action=action_name,
+                severity=verdict.severity.value,
+                signals=verdict.signals,
+            )
+        return injection.wrap_tool_observation(action_name, observation)
+
+    async def _auto_call(name: str, args: dict) -> ToolResult:
+        """Run a tool the model never asked for, and record it exactly like one
+        it did - visible in `result.steps`, and fingerprinted so a later model
+        decision that duplicates it hits the repeated-action guard instead of
+        re-running it."""
+        tool_result = await run_tool(name, args, session=session, subject=subject)
+        result.steps.append(
+            StepLog("(automatic)", name, args, tool_result.observation, tool_result.ok)
+        )
+        transcript.append(f"Action: {name}({args})")
+        transcript.append(f"Observation: {_transcript_observation(name, tool_result.observation)}")
+        seen_actions.add(f"{name}:{json.dumps(args, sort_keys=True, default=str)}")
+        return tool_result
 
     for _step_num in range(MAX_STEPS):
         if time.perf_counter() - started > MAX_SECONDS:
@@ -154,16 +227,50 @@ async def run(session: AsyncSession, subject: AuthSubject, claim_number: str) ->
             seen_actions.add(fingerprint)
 
             tool_result = await run_tool(action, action_input, session=session, subject=subject)
-            if action == "get_claim_status" and tool_result.ok and tool_result.data:
-                claim = tool_result.data["claim"]
-                memory["product_name"] = claim.product_name
-                memory["date_of_loss"] = claim.date_of_loss
 
         result.steps.append(
             StepLog(thought, action, action_input, tool_result.observation, tool_result.ok)
         )
         transcript.append(f"Action: {action}({action_input})")
-        transcript.append(f"Observation: {tool_result.observation}")
+        shown = _transcript_observation(action, tool_result.observation)
+        transcript.append(f"Observation: {shown}")
+
+        if action == "get_claim_status" and tool_result.ok and tool_result.data:
+            claim = tool_result.data["claim"]
+            memory["product_name"] = claim.product_name
+            memory["date_of_loss"] = claim.date_of_loss
+            memory["status"] = claim.status
+            memory["rejection_clause_ref"] = claim.rejection_clause_ref
+
+            # Auto-fetch, not a model decision. Both calls below are triggered
+            # by conditions the fixed sequence (app/claims/handover.py) already
+            # evaluates unconditionally from the fetched claim - neither was
+            # ever a judgment call, so neither is left in TOOL_SPECS. Costs a
+            # tool round-trip each, zero extra LLM calls: they do not consume a
+            # `_step_num` slot or a `complete()` call.
+            #
+            # get_claim_notes: Week 8's trajectory eval found the model
+            # silently skipped it in 10/20 real-claim runs even though the
+            # outcome assertions still passed - a right-looking answer missing
+            # an operative note.
+            await _auto_call("get_claim_notes", {"claim_number": claim_number})
+
+            # search_policy_clause: discovered *because of* the notes fix
+            # above - once notes were always present, the model saw a note
+            # repeating the rejection reason and skipped fetching the actual
+            # clause 4/5 times (was 0/5 before), and 2 of those runs then
+            # failed `denial_cites_clause` outright - a denial with no citable
+            # clause. Same root cause as the notes gap (a mechanical decision
+            # left to judgment), so it gets the same fix.
+            if claim.status is ClaimStatus.REJECTED and claim.rejection_clause_ref:
+                await _auto_call(
+                    "search_policy_clause",
+                    {
+                        "clause_ref": claim.rejection_clause_ref,
+                        "product_name": claim.product_name,
+                        "date_of_loss": claim.date_of_loss,
+                    },
+                )
     else:
         result.stop_reason = "max_steps_exceeded"
 
@@ -174,6 +281,29 @@ async def run(session: AsyncSession, subject: AuthSubject, claim_number: str) ->
         result.answer = (
             f"Investigation stopped early ({result.stop_reason}). "
             f"What was found: {observations or 'nothing yet'}."
+        )
+
+    result.raw_answer = result.answer
+
+    # Output validation: the fence and the prompt's explicit warning both
+    # failed against Week 8's injection payload (10/10 trials still shipped
+    # "approved"). This check does not trust the model to have resisted it -
+    # it compares what the model wrote against the status `get_claim_status`
+    # actually observed, gated on the enum, not on prose (a text check like
+    # "does the answer contain a denial word" has a false negative here: the
+    # clause text legitimately contains "excluded").
+    if memory.get("status") is ClaimStatus.REJECTED and APPROVAL_STATUS_RE.search(result.answer):
+        log.warning(
+            "Final answer contradicted observed status - overriding",
+            claim_number=claim_number,
+            raw_answer=result.answer[:200],
+        )
+        result.output_overridden = True
+        clause_ref = memory.get("rejection_clause_ref")
+        clause_note = f" (clause {clause_ref})" if clause_ref else ""
+        result.answer = (
+            f"Claim {claim_number} is REJECTED{clause_note}. The generated handover text "
+            "was withheld because it contradicted the claim's observed status."
         )
 
     result.elapsed_ms = int((time.perf_counter() - started) * 1000)

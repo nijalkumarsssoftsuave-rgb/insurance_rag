@@ -36,6 +36,20 @@ class HandoverResult:
     steps: list[str] = field(default_factory=list)
 
 
+def expected_tools(claim: ClaimView) -> set[str]:
+    """Which tools a correct investigation of this claim must call.
+
+    The single source of truth for "what should have happened" - both `run()`
+    below and `eval/week8/trajectory.py` call this rather than each carrying
+    their own copy of the branch condition, which is exactly the kind of
+    duplicated, driftable truth this module's own docstring warns about.
+    """
+    tools = {"get_claim_status", "get_claim_notes"}
+    if claim.status is ClaimStatus.REJECTED and claim.rejection_clause_ref:
+        tools.add("search_policy_clause")
+    return tools
+
+
 async def run(session: AsyncSession, subject: AuthSubject, claim_number: str) -> HandoverResult:
     started = time.perf_counter()
     result = HandoverResult(answer="")
@@ -55,7 +69,7 @@ async def run(session: AsyncSession, subject: AuthSubject, claim_number: str) ->
     result.steps.append(notes.observation)
 
     clause_text: str | None = None
-    if claim.status is ClaimStatus.REJECTED and claim.rejection_clause_ref:
+    if "search_policy_clause" in expected_tools(claim):
         clause = await search_policy_clause(
             session,
             subject,
