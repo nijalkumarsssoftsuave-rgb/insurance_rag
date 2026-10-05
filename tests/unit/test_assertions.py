@@ -47,6 +47,16 @@ def test_comma_after_a_currency_marker_is_not_an_amount() -> None:
     assert "amounts_numeric" not in failures(REAL)
 
 
+def test_clause_reference_with_a_colon_is_accepted() -> None:
+    """"Clause reference: 4.11" (colon, not period) - Week 10's squad wrote
+    exactly this and failed `denial_cites_clause` despite citing the clause
+    correctly; the keyword/number separator was period-only."""
+    assert "denial_cites_clause" not in failures(
+        "Claim CLM-2026-0004 is rejected. Clause reference: 4.11 - dental treatment excluded. "
+        "Date of loss 27 May 2026. Claimed INR 41,200.00. Approved INR 0.00."
+    )
+
+
 def test_denial_without_a_clause_is_caught() -> None:
     assert failures(
         "Claim CLM-2026-0004 was denied. Date of loss 27 May 2026. Claimed INR 41,200.00."

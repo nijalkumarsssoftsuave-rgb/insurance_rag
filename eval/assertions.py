@@ -35,8 +35,17 @@ DENIAL_RE = re.compile(
 # also matches the "0.00" inside "the approved amount is 0.00 INR" - which let a
 # denial with no clause reference at all pass this check, the exact failure the
 # assertion exists to catch.
+#
+# The separator between the keyword and the number allows an optional colon
+# as well as a period (`[.:]?`, not `\.?`) - found via Week 10's squad, whose
+# manager wrote "Clause reference: 4.11" (colon, not period). `\.?` matched
+# every real-agent phrasing this assertion had been tested against before
+# ("clause 4.11", "the policy clause reference 4.11") but silently failed a
+# correct citation the moment a colon was used - the same "fires on correct
+# output" failure direction the three bugs in `amounts_numeric` already
+# document, now found on this assertion instead.
 CLAUSE_REF_RE = re.compile(
-    r"\b(?:clause|section|cl\.)\s*(?:reference|ref|no|number)?\.?\s*(\d{1,2}(?:\.\d{1,2})?)\b",
+    r"\b(?:clause|section|cl\.)\s*(?:reference|ref|no|number)?[.:]?\s*(\d{1,2}(?:\.\d{1,2})?)\b",
     re.I,
 )
 
