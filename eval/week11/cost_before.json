@@ -1,0 +1,240 @@
+{
+  "summary": {
+    "n_runs": 15,
+    "cost_usd_mean": 0.00079431,
+    "cost_usd_p99": 0.0010933619999999998,
+    "cost_usd_total": 0.011914649999999999,
+    "wall_ms_mean": 17647.533333333333
+  },
+  "step_totals_usd": {
+    "route": 0.00128655,
+    "retrieve_expand": 0.0008614499999999997,
+    "generate": 0.005140800000000001,
+    "verify": 0.004625849999999999
+  },
+  "step_share": {
+    "route": 0.108,
+    "retrieve_expand": 0.072,
+    "generate": 0.431,
+    "verify": 0.388
+  },
+  "by_question": {
+    "coverage_dental": [
+      {
+        "wall_ms": 143103,
+        "total_input_tokens": 4525,
+        "total_output_tokens": 223,
+        "total_cost_usd": 0.00081255,
+        "cost_by_step": {
+          "route": 8.625e-05,
+          "retrieve_expand": 3.7199999999999996e-05,
+          "generate": 0.0003747,
+          "verify": 0.00031439999999999994
+        },
+        "abstained": false,
+        "intent": "policy_qa"
+      },
+      {
+        "wall_ms": 8235,
+        "total_input_tokens": 4525,
+        "total_output_tokens": 223,
+        "total_cost_usd": 0.00081255,
+        "cost_by_step": {
+          "route": 8.625e-05,
+          "retrieve_expand": 3.7199999999999996e-05,
+          "generate": 0.0003747,
+          "verify": 0.00031439999999999994
+        },
+        "abstained": false,
+        "intent": "policy_qa"
+      },
+      {
+        "wall_ms": 8226,
+        "total_input_tokens": 4616,
+        "total_output_tokens": 222,
+        "total_cost_usd": 0.0008255999999999999,
+        "cost_by_step": {
+          "route": 8.625e-05,
+          "retrieve_expand": 3.5999999999999994e-05,
+          "generate": 0.00038205,
+          "verify": 0.00032129999999999995
+        },
+        "abstained": false,
+        "intent": "policy_qa"
+      }
+    ],
+    "coverage_ped": [
+      {
+        "wall_ms": 9371,
+        "total_input_tokens": 4652,
+        "total_output_tokens": 181,
+        "total_cost_usd": 0.0008064,
+        "cost_by_step": {
+          "route": 8.444999999999999e-05,
+          "retrieve_expand": 3.5999999999999994e-05,
+          "generate": 0.0003648,
+          "verify": 0.00032114999999999997
+        },
+        "abstained": false,
+        "intent": "policy_qa"
+      },
+      {
+        "wall_ms": 8416,
+        "total_input_tokens": 4646,
+        "total_output_tokens": 175,
+        "total_cost_usd": 0.0008018999999999999,
+        "cost_by_step": {
+          "route": 8.444999999999999e-05,
+          "retrieve_expand": 3.5999999999999994e-05,
+          "generate": 0.0003612,
+          "verify": 0.00032024999999999995
+        },
+        "abstained": false,
+        "intent": "policy_qa"
+      },
+      {
+        "wall_ms": 7621,
+        "total_input_tokens": 4612,
+        "total_output_tokens": 141,
+        "total_cost_usd": 0.0007764,
+        "cost_by_step": {
+          "route": 8.444999999999999e-05,
+          "retrieve_expand": 3.5999999999999994e-05,
+          "generate": 0.0003408,
+          "verify": 0.00031515
+        },
+        "abstained": false,
+        "intent": "policy_qa"
+      }
+    ],
+    "coverage_maternity": [
+      {
+        "wall_ms": 9572,
+        "total_input_tokens": 6389,
+        "total_output_tokens": 226,
+        "total_cost_usd": 0.00109395,
+        "cost_by_step": {
+          "route": 8.444999999999999e-05,
+          "retrieve_expand": 6.84e-05,
+          "generate": 0.0003273,
+          "verify": 0.0006138
+        },
+        "abstained": true,
+        "intent": "policy_qa"
+      },
+      {
+        "wall_ms": 8627,
+        "total_input_tokens": 6385,
+        "total_output_tokens": 220,
+        "total_cost_usd": 0.00108975,
+        "cost_by_step": {
+          "route": 8.444999999999999e-05,
+          "retrieve_expand": 6.84e-05,
+          "generate": 0.00032609999999999996,
+          "verify": 0.0006108
+        },
+        "abstained": true,
+        "intent": "policy_qa"
+      },
+      {
+        "wall_ms": 9770,
+        "total_input_tokens": 6385,
+        "total_output_tokens": 220,
+        "total_cost_usd": 0.00108975,
+        "cost_by_step": {
+          "route": 8.444999999999999e-05,
+          "retrieve_expand": 6.84e-05,
+          "generate": 0.00032609999999999996,
+          "verify": 0.0006108
+        },
+        "abstained": true,
+        "intent": "policy_qa"
+      }
+    ],
+    "general_policy": [
+      {
+        "wall_ms": 6748,
+        "total_input_tokens": 2229,
+        "total_output_tokens": 188,
+        "total_cost_usd": 0.00044715,
+        "cost_by_step": {
+          "route": 8.49e-05,
+          "retrieve_expand": 3.8849999999999996e-05,
+          "generate": 0.0003234
+        },
+        "abstained": false,
+        "intent": "claim_intake"
+      },
+      {
+        "wall_ms": 5529,
+        "total_input_tokens": 2229,
+        "total_output_tokens": 186,
+        "total_cost_usd": 0.00044594999999999997,
+        "cost_by_step": {
+          "route": 8.49e-05,
+          "retrieve_expand": 3.8849999999999996e-05,
+          "generate": 0.00032219999999999997
+        },
+        "abstained": false,
+        "intent": "claim_intake"
+      },
+      {
+        "wall_ms": 6367,
+        "total_input_tokens": 2229,
+        "total_output_tokens": 188,
+        "total_cost_usd": 0.00044715,
+        "cost_by_step": {
+          "route": 8.49e-05,
+          "retrieve_expand": 3.8849999999999996e-05,
+          "generate": 0.0003234
+        },
+        "abstained": false,
+        "intent": "claim_intake"
+      }
+    ],
+    "claim_status": [
+      {
+        "wall_ms": 12857,
+        "total_input_tokens": 4279,
+        "total_output_tokens": 300,
+        "total_cost_usd": 0.00082185,
+        "cost_by_step": {
+          "route": 8.879999999999999e-05,
+          "retrieve_expand": 0.0001071,
+          "generate": 0.00033135,
+          "verify": 0.00029459999999999995
+        },
+        "abstained": false,
+        "intent": "claim_status"
+      },
+      {
+        "wall_ms": 9555,
+        "total_input_tokens": 4279,
+        "total_output_tokens": 300,
+        "total_cost_usd": 0.00082185,
+        "cost_by_step": {
+          "route": 8.879999999999999e-05,
+          "retrieve_expand": 0.0001071,
+          "generate": 0.00033135,
+          "verify": 0.00029459999999999995
+        },
+        "abstained": false,
+        "intent": "claim_status"
+      },
+      {
+        "wall_ms": 10716,
+        "total_input_tokens": 4279,
+        "total_output_tokens": 300,
+        "total_cost_usd": 0.00082185,
+        "cost_by_step": {
+          "route": 8.879999999999999e-05,
+          "retrieve_expand": 0.0001071,
+          "generate": 0.00033135,
+          "verify": 0.00029459999999999995
+        },
+        "abstained": false,
+        "intent": "claim_status"
+      }
+    ]
+  }
+}

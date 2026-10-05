@@ -2,15 +2,22 @@
 
 Shape:
 
-    guard ──▶ condense ──▶ route ──┬─▶ claim_lookup ─┬─▶ clause_handoff ─▶ retrieve
-                 │                 │                 └─▶ END
-                 │                 ├─▶ retrieve ─▶ [gate] ─┬─▶ generate ─▶ verify ─▶ END
-                 │                 │                       └─▶ abstain ─▶ END
+    guard ──▶ condense ──▶ route ──┬─▶ claim_lookup ─┬─▶ clause_handoff ─┐
+                 │                 │                 └─▶ END            │
+                 │                 ├─▶ cache_check ◀─────────────────────┘
+                 │                 │        ├─ hit ──▶ END
+                 │                 │        └─ miss ─▶ retrieve ─▶ [gate]
+                 │                 │                  ├─▶ generate ─▶ verify ─▶ cache_store ─▶ END
+                 │                 │                  └─▶ abstain ─▶ END
                  │                 └─▶ scope_reply ─▶ END
                  └─(blocked)──────────────────────────────────▶ END
 
 Lane B can fall through into Lane A: a rejected claim carries a clause reference,
 and explaining that clause is a document question.
+
+`cache_check`/`cache_store` (Week 11) sit around the expensive middle of Lane
+A only - never on the claim-status path itself, which is customer-specific
+and must never be served to a different customer from a cache.
 """
 
 from __future__ import annotations
@@ -21,6 +28,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from app.core.enums import Intent
+from app.graph.nodes.cache import cache_check_node, cache_store_node
 from app.graph.nodes.claim_lookup import (
     claim_lookup_node,
     clause_handoff_node,
@@ -65,7 +73,7 @@ def after_guard(state: ConversationState) -> Literal["condense", "end"]:
 
 def by_intent(
     state: ConversationState,
-) -> Literal["claim_lookup", "retrieve", "scope_reply"]:
+) -> Literal["claim_lookup", "cache_check", "scope_reply"]:
     intent = state.get("intent")
     if intent is Intent.CLAIM_STATUS:
         return "claim_lookup"
@@ -73,7 +81,13 @@ def by_intent(
         return "scope_reply"
     # POLICY_QA and CLAIM_INTAKE both need document grounding. Intake is not yet
     # a guided flow; until it is, answering the procedure from the SOP is right.
-    return "retrieve"
+    # Both are safe to cache (see app/graph/nodes/cache.py), so both go
+    # through the cache check first, same as the clause hand-off below.
+    return "cache_check"
+
+
+def after_cache_check(state: ConversationState) -> Literal["hit", "miss"]:
+    return "hit" if state.get("cache_hit") else "miss"
 
 
 def build_graph(checkpointer=None) -> StateGraph:
@@ -91,9 +105,11 @@ def build_graph(checkpointer=None) -> StateGraph:
     graph.add_node("route", route_node)
     graph.add_node("claim_lookup", claim_lookup_node)
     graph.add_node("clause_handoff", clause_handoff_node)
+    graph.add_node("cache_check", cache_check_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("generate", generate_node)
     graph.add_node("verify", verify_node)
+    graph.add_node("cache_store", cache_store_node)
     graph.add_node("abstain", abstain_node)
     graph.add_node("scope_reply", scope_reply_node)
 
@@ -105,7 +121,7 @@ def build_graph(checkpointer=None) -> StateGraph:
         by_intent,
         {
             "claim_lookup": "claim_lookup",
-            "retrieve": "retrieve",
+            "cache_check": "cache_check",
             "scope_reply": "scope_reply",
         },
     )
@@ -116,14 +132,18 @@ def build_graph(checkpointer=None) -> StateGraph:
         needs_clause_explanation,
         {"explain": "clause_handoff", "done": END},
     )
-    graph.add_edge("clause_handoff", "retrieve")
+    graph.add_edge("clause_handoff", "cache_check")
+    graph.add_conditional_edges(
+        "cache_check", after_cache_check, {"hit": END, "miss": "retrieve"}
+    )
 
     # Lane A: the confidence gate is the only path to generation.
     graph.add_conditional_edges(
         "retrieve", confidence_gate, {"generate": "generate", "abstain": "abstain"}
     )
     graph.add_edge("generate", "verify")
-    graph.add_edge("verify", END)
+    graph.add_edge("verify", "cache_store")
+    graph.add_edge("cache_store", END)
     graph.add_edge("abstain", END)
     graph.add_edge("scope_reply", END)
 

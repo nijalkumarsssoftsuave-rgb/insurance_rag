@@ -82,10 +82,12 @@ async def route_node(state: ConversationState) -> dict:
     regex_policy = _first_group(POLICY_PATTERN, question)
 
     prompt = registry.load("router")
+    usage_tokens = {"input_tokens": 0, "output_tokens": 0}
     try:
-        parsed = await get_llm().structured(
+        parsed, usage = await get_llm().structured(
             [system(prompt.body), user(question)], RouteOutput, temperature=0.0
         )
+        usage_tokens = {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}
     except Exception as exc:
         log.warning("Router failed, falling back to heuristics", error=str(exc))
         parsed = _heuristic_route(question, regex_claim)
@@ -121,6 +123,7 @@ async def route_node(state: ConversationState) -> dict:
         "route": route,
         "intent": intent,
         "timings_ms": {"route": int((time.perf_counter() - started) * 1000)},
+        "tokens_by_step": {"route": usage_tokens},
     }
 
 

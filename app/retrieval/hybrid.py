@@ -40,6 +40,9 @@ class RetrievalOutcome:
     below_threshold: bool = True
     broadened: bool = False
     timings_ms: dict[str, int] = field(default_factory=dict)
+    # Per-expansion-mode token usage (Week 11), e.g. {"paraphrase": {...},
+    # "step_back": {...}}. Empty when expansion did not run or used none.
+    tokens_by_step: dict[str, dict[str, int]] = field(default_factory=dict)
 
     @property
     def has_context(self) -> bool:
@@ -141,9 +144,11 @@ class RetrievalPipeline:
 
         # 1. Expansion -------------------------------------------------------
         t0 = clock()
+        expansion_tokens: dict[str, dict[str, int]] = {}
         if expand_query:
             expanded = await expansion.expand(query)
             variants = expanded.all_variants
+            expansion_tokens = expanded.tokens
         else:
             variants = [query]
         timings["expand"] = int((clock() - t0) * 1000)
@@ -171,6 +176,7 @@ class RetrievalPipeline:
                 context=PackedContext(),
                 variants=variants,
                 timings_ms=timings,
+                tokens_by_step=expansion_tokens,
             )
 
         # 4. Rerank + confidence gate ----------------------------------------
@@ -217,6 +223,7 @@ class RetrievalPipeline:
             top_score=top_score,
             below_threshold=below,
             timings_ms=timings,
+            tokens_by_step=expansion_tokens,
         )
 
     async def retrieve_by_clause(

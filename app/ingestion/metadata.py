@@ -177,7 +177,12 @@ async def _extract_with_llm(head: str, filename: str = "") -> _LLMMetadata:
     from app.llm import get_llm, system, user
 
     body = f"Filename: {filename}\n\n{head}" if filename else head
-    return await get_llm().structured([system(PROMPT), user(body)], _LLMMetadata, temperature=0.0)
+    # Ingest-time, not per customer request - no per-step cost log to feed, so
+    # the usage half of structured()'s return is discarded here.
+    parsed, _usage = await get_llm().structured(
+        [system(PROMPT), user(body)], _LLMMetadata, temperature=0.0
+    )
+    return parsed
 
 
 """Effective window, stated on the cover page of most wordings."""

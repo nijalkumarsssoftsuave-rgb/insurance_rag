@@ -126,8 +126,8 @@ class OpenAIProvider:
         schema: type[T],
         *,
         temperature: float | None = None,
-    ) -> T:
-        """Native JSON-schema constrained decoding."""
+    ) -> tuple[T, Completion]:
+        """Native JSON-schema constrained decoding, plus token usage."""
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=[m.as_dict() for m in messages],
@@ -142,8 +142,15 @@ class OpenAIProvider:
             },
         )
         raw = response.choices[0].message.content or "{}"
+        usage = response.usage
+        completion = Completion(
+            text="",
+            model=response.model,
+            input_tokens=usage.prompt_tokens if usage else 0,
+            output_tokens=usage.completion_tokens if usage else 0,
+        )
         try:
-            return schema.model_validate_json(raw)
+            return schema.model_validate_json(raw), completion
         except ValidationError as exc:
             raise LLMError(f"{schema.__name__} validation failed: {exc}") from exc
 

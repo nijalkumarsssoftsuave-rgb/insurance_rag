@@ -44,6 +44,10 @@ class ExpandedQuery:
     hypothetical: str | None = None
     step_back: str | None = None
     sub_questions: list[str] = field(default_factory=list)
+    # Per-mode token usage (Week 11). Up to 4 LLM calls can happen here,
+    # concurrently, on every turn - QUERY_EXPANSION_ENABLED is true in this
+    # deployment - and none of their cost was visible anywhere before this.
+    tokens: dict[str, dict[str, int]] = field(default_factory=dict)
 
     @property
     def all_variants(self) -> list[str]:
@@ -130,13 +134,13 @@ async def expand(
             tasks[ExpansionMode.DECOMPOSE] = tg.create_task(_decompose(query))
 
     if task := tasks.get(ExpansionMode.PARAPHRASE):
-        result.paraphrases = task.result()
+        result.paraphrases, result.tokens["paraphrase"] = task.result()
     if task := tasks.get(ExpansionMode.HYDE):
-        result.hypothetical = task.result()
+        result.hypothetical, result.tokens["hyde"] = task.result()
     if task := tasks.get(ExpansionMode.STEP_BACK):
-        result.step_back = task.result()
+        result.step_back, result.tokens["step_back"] = task.result()
     if task := tasks.get(ExpansionMode.DECOMPOSE):
-        result.sub_questions = task.result()
+        result.sub_questions, result.tokens["decompose"] = task.result()
 
     return result
 
@@ -160,47 +164,56 @@ def default_modes(query: str) -> list[ExpansionMode]:
     return modes
 
 
-async def _paraphrase(query: str, n: int) -> list[str]:
+_ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0}
+
+
+async def _paraphrase(query: str, n: int) -> tuple[list[str], dict[str, int]]:
     try:
-        out = await get_llm().structured(
+        out, completion = await get_llm().structured(
             [system(_PARAPHRASE_PROMPT), user(f"Produce {n} rewritings of: {query}")],
             _Paraphrases,
         )
-        return [q.strip() for q in out.queries[:n] if q.strip()]
+        usage = {"input_tokens": completion.input_tokens, "output_tokens": completion.output_tokens}
+        return [q.strip() for q in out.queries[:n] if q.strip()], usage
     except (LLMError, Exception) as exc:
         log.warning("Paraphrase expansion failed", error=str(exc))
-        return []
+        return [], dict(_ZERO_USAGE)
 
 
-async def _hyde(query: str) -> str | None:
+async def _hyde(query: str) -> tuple[str | None, dict[str, int]]:
     try:
         completion = await get_llm().complete(
             [system(_HYDE_PROMPT), user(query)], temperature=0.0, max_tokens=200
         )
-        return completion.text.strip() or None
+        usage = {"input_tokens": completion.input_tokens, "output_tokens": completion.output_tokens}
+        return completion.text.strip() or None, usage
     except Exception as exc:
         log.warning("HyDE expansion failed", error=str(exc))
-        return None
+        return None, dict(_ZERO_USAGE)
 
 
-async def _step_back(query: str) -> str | None:
+async def _step_back(query: str) -> tuple[str | None, dict[str, int]]:
     try:
         completion = await get_llm().complete(
             [system(_STEP_BACK_PROMPT), user(query)], temperature=0.0, max_tokens=80
         )
+        usage = {"input_tokens": completion.input_tokens, "output_tokens": completion.output_tokens}
         text = completion.text.strip()
-        return text if text and text.lower() != query.lower() else None
+        return (text if text and text.lower() != query.lower() else None), usage
     except Exception as exc:
         log.warning("Step-back expansion failed", error=str(exc))
-        return None
+        return None, dict(_ZERO_USAGE)
 
 
-async def _decompose(query: str) -> list[str]:
+async def _decompose(query: str) -> tuple[list[str], dict[str, int]]:
     try:
-        out = await get_llm().structured([system(_DECOMPOSE_PROMPT), user(query)], _SubQuestions)
+        out, completion = await get_llm().structured(
+            [system(_DECOMPOSE_PROMPT), user(query)], _SubQuestions
+        )
+        usage = {"input_tokens": completion.input_tokens, "output_tokens": completion.output_tokens}
         subs = [q.strip() for q in out.questions if q.strip()]
         # A single sub-question means it did not decompose - drop it as a duplicate.
-        return subs if len(subs) > 1 else []
+        return (subs if len(subs) > 1 else []), usage
     except Exception as exc:
         log.warning("Decomposition failed", error=str(exc))
-        return []
+        return [], dict(_ZERO_USAGE)

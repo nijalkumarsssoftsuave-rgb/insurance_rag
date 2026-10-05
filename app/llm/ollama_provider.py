@@ -18,7 +18,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from app.config import settings
-from app.llm.base import Message, system
+from app.llm.base import Completion, Message, system
 from app.llm.openai_provider import OpenAIProvider, _json_fallback
 
 T = TypeVar("T", bound=BaseModel)
@@ -46,7 +46,7 @@ class OllamaProvider(OpenAIProvider):
         schema: type[T],
         *,
         temperature: float | None = None,
-    ) -> T:
+    ) -> tuple[T, Completion]:
         instruction = system(
             "Respond with a single JSON object and nothing else. No prose, no code "
             f"fences. It must match this JSON Schema:\n{json.dumps(schema.model_json_schema())}"
@@ -57,4 +57,15 @@ class OllamaProvider(OpenAIProvider):
             temperature=0.0 if temperature is None else temperature,
             response_format={"type": "json_object"},
         )
-        return _json_fallback(response.choices[0].message.content or "", schema)
+        # Local inference has no $ cost, but token counts still matter for the
+        # same per-step log - Ollama's OpenAI-compatible endpoint reports usage
+        # on recent server versions; `usage` is None on older ones, hence the
+        # guard rather than an assumption.
+        usage = response.usage
+        completion = Completion(
+            text="",
+            model=response.model,
+            input_tokens=usage.prompt_tokens if usage else 0,
+            output_tokens=usage.completion_tokens if usage else 0,
+        )
+        return _json_fallback(response.choices[0].message.content or "", schema), completion

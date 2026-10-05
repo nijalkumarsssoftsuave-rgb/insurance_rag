@@ -79,6 +79,10 @@ class ConversationState(TypedDict, total=False):
     needs_human: bool
     verified: bool
     verification_notes: list[str]
+    # Set only by cache_check_node on a semantic-cache hit (Week 11) - the
+    # signal cache_store_node uses to avoid re-caching an answer that was
+    # itself served from the cache.
+    cache_hit: bool
 
     # ── bookkeeping ──────────────────────────────────────────────────────
     model: str
@@ -88,6 +92,12 @@ class ConversationState(TypedDict, total=False):
     # Accumulated across nodes rather than overwritten, so one turn yields one
     # complete timing breakdown.
     timings_ms: Annotated[dict[str, int], operator.or_]
+    # Same accumulation pattern, for cost: {"route": {"input_tokens": N,
+    # "output_tokens": M}, "condense": {...}, ...}. Added Week 11 - every node
+    # that calls an LLM now reports its own usage here, the same way every node
+    # already reports its own timing above. `input_tokens`/`output_tokens`
+    # below are the per-turn totals summed from this at persist time.
+    tokens_by_step: Annotated[dict[str, dict[str, int]], operator.or_]
     retry_count: int
     error: str | None
 
@@ -122,6 +132,7 @@ def initial_state(
         retrieved_chunk_ids=[],
         citations=[],
         timings_ms={},
+        tokens_by_step={},
         retry_count=0,
         confidence=0.0,
     )

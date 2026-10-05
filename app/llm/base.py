@@ -80,10 +80,19 @@ class LLMProvider(Protocol):
         schema: type[T],
         *,
         temperature: float | None = None,
-    ) -> T:
-        """Constrained decoding into ``schema``.
+    ) -> tuple[T, Completion]:
+        """Constrained decoding into ``schema``, plus the call's token usage.
 
         Used by the router and the verifier, where a free-text answer that has to
         be parsed defensively is a source of silent failure.
+
+        Returns the usage alongside the parsed object rather than discarding it
+        (Week 11): every graph node that calls this makes a real LLM call with a
+        real cost, and a method that silently drops `response.usage` is how
+        `messages.input_tokens`/`output_tokens` ended up NULL on every row ever
+        written - confirmed empirically, not assumed (36/36 real messages, 0 with
+        token counts). `Completion.text` is empty here; only its usage fields are
+        meaningful for this method. A caller that does not need the usage writes
+        `parsed, _ = await llm.structured(...)` - one token, not a refactor.
         """
         ...

@@ -67,6 +67,16 @@ async def record(
             resource_id=resource_id,
             error=str(exc),
         )
+        # "Never raises" was not actually true before this: a failed flush
+        # (e.g. a constraint violation) leaves the session in SQLAlchemy's
+        # "pending rollback" state, and the *caller's own later commit* on
+        # this same session then raises PendingRollbackError - a crash that
+        # looks unrelated to auditing, from code that never touched this
+        # function's own exception handling. Found by actually exercising
+        # this path (eval/week11/cost_report.py, a subject whose user_id did
+        # not exist yet), not read off the code. Rolling back here is what
+        # makes "logged, not fatal" true for whatever runs next.
+        await session.rollback()
 
 
 async def record_answer(

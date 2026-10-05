@@ -114,9 +114,15 @@ async def verify_node(state: ConversationState) -> dict:
     prompt = registry.load("verify")
     question = state.get("standalone_question") or state["question"]
     context = state.get("context_text", "")
+    usage_tokens = {"input_tokens": 0, "output_tokens": 0}
+
+    def _add_usage(completion) -> None:
+        usage_tokens["input_tokens"] += completion.input_tokens
+        usage_tokens["output_tokens"] += completion.output_tokens
 
     try:
-        result = await _check(prompt.body, context, question, answer)
+        result, completion = await _check(prompt.body, context, question, answer)
+        _add_usage(completion)
 
         # A single judgement is not stable enough to abstain on. Even at
         # temperature 0 the check is not deterministic, and it was rejecting
@@ -130,7 +136,8 @@ async def verify_node(state: ConversationState) -> dict:
         # ungrounded answer fails both. This tightens what abstention *means*
         # rather than loosening the guard: we still abstain, just not on noise.
         if not result.grounded:
-            second = await _check(prompt.body, context, question, answer)
+            second, second_completion = await _check(prompt.body, context, question, answer)
+            _add_usage(second_completion)
             if second.grounded:
                 log.info("Groundedness check disagreed with itself, accepting on retry")
                 notes.append("groundedness_flaky")
@@ -144,12 +151,13 @@ async def verify_node(state: ConversationState) -> dict:
             "verified": True,
             "verification_notes": notes,
             "timings_ms": {"verify": int((time.perf_counter() - started) * 1000)},
+            "tokens_by_step": {"verify": usage_tokens},
         }
 
     if not result.grounded:
         notes.append(f"unsupported_claims:{len(result.unsupported_claims)}")
         log.warning("Groundedness check failed", claims=result.unsupported_claims[:3])
-        return _reject(notes, started)
+        return _reject(notes, started, usage_tokens)
 
     # Only gate on exclusions when the answer actually tells the customer that
     # something IS covered. That is the statement with money attached; a
@@ -157,12 +165,13 @@ async def verify_node(state: ConversationState) -> dict:
     # exclusions section to be defensible.
     if POSITIVE_COVERAGE.search(answer) and not result.checked_exclusions:
         notes.append("exclusions_not_checked")
-        return _reject(notes, started)
+        return _reject(notes, started, usage_tokens)
 
     return {
         "verified": True,
         "verification_notes": notes,
         "timings_ms": {"verify": int((time.perf_counter() - started) * 1000)},
+        "tokens_by_step": {"verify": usage_tokens},
     }
 
 
@@ -191,7 +200,7 @@ def _invented_clauses(answer: str, blocks: list[dict]) -> set[str]:
 
 async def _check(
     instruction: str, context: str, question: str, answer: str
-) -> VerificationResult:
+):
     return await get_llm().structured(
         [
             system(instruction),
@@ -202,7 +211,7 @@ async def _check(
     )
 
 
-def _reject(notes: list[str], started: float) -> dict:
+def _reject(notes: list[str], started: float, usage_tokens: dict[str, int] | None = None) -> dict:
     return {
         "answer": UNVERIFIED_MESSAGE,
         "citations": [],
@@ -212,4 +221,5 @@ def _reject(notes: list[str], started: float) -> dict:
         "confidence": 0.0,
         "verification_notes": notes,
         "timings_ms": {"verify": int((time.perf_counter() - started) * 1000)},
+        "tokens_by_step": {"verify": usage_tokens or {"input_tokens": 0, "output_tokens": 0}},
     }

@@ -42,9 +42,12 @@ class FakeLLM:
         return Completion(text=self._text, model=self.model)
 
     async def structured(self, messages, schema, **kwargs):
+        # structured() returns (parsed, Completion) since Week 11 - the usage
+        # half is what makes per-step cost logging possible at all.
+        usage = Completion(text="", model=self.model, input_tokens=0, output_tokens=0)
         if schema in self._structured:
-            return self._structured[schema]
-        return schema()
+            return self._structured[schema], usage
+        return schema(), usage
 
     async def stream(self, messages, **kwargs):
         yield self._text
@@ -85,7 +88,15 @@ def patch_llm(monkeypatch):
 
 @pytest.fixture
 def patch_retrieval(monkeypatch):
-    """Replace the retrieve node so no embedder or Qdrant is needed."""
+    """Replace the retrieve node so no embedder or Qdrant is needed.
+
+    Also forces cache_check to a permanent miss and cache_store to a no-op
+    (Week 11): both would otherwise reach the real Valkey instance, and a
+    cache_check hit on data left over from another run/session would make a
+    test silently skip the very pipeline it exists to exercise - the same
+    isolation this fixture already promises for the embedder and Qdrant,
+    extended to the one new thing that can reach out of the test.
+    """
 
     def apply(**overrides):
         async def fake_retrieve(state):
@@ -102,14 +113,23 @@ def patch_retrieval(monkeypatch):
             base.update(overrides)
             return base
 
-        # Patch the name the *builder* holds, not the one in the node module.
-        # `builder.py` does `from ...retrieve import retrieve_node` at import
-        # time, so it owns its own reference - patching the node module would
-        # leave the graph calling the real pipeline, which loads 2.3 GB of
-        # weights and reaches for Qdrant.
+        async def fake_cache_check(state):  # noqa: ARG001
+            return {}  # always a miss
+
+        async def fake_cache_store(state):  # noqa: ARG001
+            return {}  # never writes
+
+        # Patch the names the *builder* holds, not the ones in the node
+        # modules. `builder.py` does `from ...retrieve import retrieve_node`
+        # at import time, so it owns its own references - patching the node
+        # module would leave the graph calling the real pipeline, which
+        # loads 2.3 GB of weights and reaches for Qdrant (or, for caching,
+        # for a live Valkey instance this test has no business depending on).
         import app.graph.builder as builder_mod
 
         monkeypatch.setattr(builder_mod, "retrieve_node", fake_retrieve)
+        monkeypatch.setattr(builder_mod, "cache_check_node", fake_cache_check)
+        monkeypatch.setattr(builder_mod, "cache_store_node", fake_cache_store)
         return build_graph()  # graph binds nodes at build time, so rebuild
 
     return apply

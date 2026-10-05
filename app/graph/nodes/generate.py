@@ -64,7 +64,7 @@ async def generate_node(state: ConversationState) -> dict:
     ]
 
     try:
-        result = await llm.structured(
+        result, usage = await llm.structured(
             messages, GroundedAnswer, temperature=prompt.temperature or 0.1
         )
     except Exception as exc:
@@ -79,6 +79,7 @@ async def generate_node(state: ConversationState) -> dict:
             "needs_human": True,
             "error": str(exc),
             "timings_ms": {"generate": int((time.perf_counter() - started) * 1000)},
+            "tokens_by_step": {"generate": {"input_tokens": 0, "output_tokens": 0}},
         }
 
     # Restore any PII the guard masked. The user supplied it; echoing it back to
@@ -96,6 +97,9 @@ async def generate_node(state: ConversationState) -> dict:
         "model": llm.model,
         "prompt_version": prompt.qualified,
         "timings_ms": {"generate": int((time.perf_counter() - started) * 1000)},
+        "tokens_by_step": {
+            "generate": {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}
+        },
     }
 
 

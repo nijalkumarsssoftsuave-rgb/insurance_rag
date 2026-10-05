@@ -29,7 +29,9 @@ from app.db.models import Conversation, Message
 from app.deps import DbSession, Subject
 from app.graph.builder import get_graph
 from app.graph.state import initial_state
+from app.llm.pricing import cost_usd
 from app.logging import get_logger
+from app.security import audit
 
 log = get_logger(__name__)
 
@@ -195,6 +197,21 @@ def _replay_bundle(result: dict, *, redacted: bool) -> dict:
             "needs_human": bool(result.get("needs_human")),
         },
         "timings_ms": result.get("timings_ms") or {},
+        # Per-node token usage and cost (Week 11) - the sibling of timings_ms
+        # above, same shape, same reason: one lump total could not tell you
+        # which step actually spent the money, any more than one lump latency
+        # could tell you which step was slow.
+        "tokens_by_step": result.get("tokens_by_step") or {},
+        "cost_usd_by_step": _cost_by_step(
+            result.get("tokens_by_step") or {}, model=settings.llm.llm_model
+        ),
+    }
+
+
+def _cost_by_step(tokens_by_step: dict[str, dict[str, int]], *, model: str) -> dict[str, float]:
+    return {
+        step: round(cost_usd(model, t.get("input_tokens", 0), t.get("output_tokens", 0)), 8)
+        for step, t in tokens_by_step.items()
     }
 
 
@@ -221,6 +238,16 @@ async def _persist(
         # audit trail quietly becomes a PII store.
         stored_question = result.get("masked_question") or question
         redacted = bool(result.get("pii_mapping"))
+
+        # Summed from tokens_by_step, not read off a single node's output -
+        # before Week 11 nothing populated these two columns on any node's
+        # returned dict, so every row ever written here had them NULL
+        # (confirmed against the live table: 36/36 messages, 0 with a token
+        # count). `structured()` discarding `response.usage` was the root
+        # cause (see app/llm/base.py); this is the other half of that fix.
+        tokens_by_step = result.get("tokens_by_step") or {}
+        total_input_tokens = sum(t.get("input_tokens", 0) for t in tokens_by_step.values())
+        total_output_tokens = sum(t.get("output_tokens", 0) for t in tokens_by_step.values())
 
         conversation = await session.scalar(
             select(Conversation).where(Conversation.thread_id == conversation_id)
@@ -254,10 +281,20 @@ async def _persist(
                 confidence=result.get("confidence", 0.0),
                 abstained=bool(result.get("abstained")),
                 latency_ms=latency_ms,
-                input_tokens=result.get("input_tokens"),
-                output_tokens=result.get("output_tokens"),
+                input_tokens=total_input_tokens,
+                output_tokens=total_output_tokens,
                 trace=_replay_bundle(result, redacted=redacted),
             )
+        )
+        await audit.record_answer(
+            session,
+            subject=subject,
+            conversation_id=conversation_id,
+            abstained=bool(result.get("abstained")),
+            chunk_ids=result.get("retrieved_chunk_ids") or [],
+            model=result.get("model"),
+            prompt_version=result.get("prompt_version"),
+            confidence=result.get("confidence", 0.0),
         )
         await session.commit()
     except Exception as exc:

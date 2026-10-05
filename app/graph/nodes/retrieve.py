@@ -119,4 +119,16 @@ async def retrieve_node(state: ConversationState) -> dict:
             **outcome.timings_ms,
             "retrieve_total": int((time.perf_counter() - started) * 1000),
         },
+        # outcome.tokens_by_step is keyed by expansion mode (paraphrase,
+        # step_back, ...) - up to 4 LLM calls this state's "retrieve" timing
+        # entry already includes the latency of, but whose cost had never been
+        # logged anywhere before Week 11.
+        "tokens_by_step": {"retrieve_expand": _sum_tokens(outcome.tokens_by_step)},
+    }
+
+
+def _sum_tokens(by_mode: dict[str, dict[str, int]]) -> dict[str, int]:
+    return {
+        "input_tokens": sum(v.get("input_tokens", 0) for v in by_mode.values()),
+        "output_tokens": sum(v.get("output_tokens", 0) for v in by_mode.values()),
     }

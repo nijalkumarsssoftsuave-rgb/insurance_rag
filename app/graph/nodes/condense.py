@@ -37,6 +37,7 @@ async def condense_node(state: ConversationState) -> dict:
         return {"standalone_question": question, "timings_ms": {"condense": 0}}
 
     prompt = registry.load("condense")
+    usage_tokens = {"input_tokens": 0, "output_tokens": 0}
     try:
         completion = await get_llm().complete(
             [
@@ -47,6 +48,10 @@ async def condense_node(state: ConversationState) -> dict:
             max_tokens=200,
         )
         standalone = completion.text.strip() or question
+        usage_tokens = {
+            "input_tokens": completion.input_tokens,
+            "output_tokens": completion.output_tokens,
+        }
     except Exception as exc:
         # Degrade to the raw question. A worse retrieval query beats a failed turn.
         log.warning("Condensation failed, using raw question", error=str(exc))
@@ -58,6 +63,7 @@ async def condense_node(state: ConversationState) -> dict:
     return {
         "standalone_question": standalone,
         "timings_ms": {"condense": int((time.perf_counter() - started) * 1000)},
+        "tokens_by_step": {"condense": usage_tokens},
     }
 
 
