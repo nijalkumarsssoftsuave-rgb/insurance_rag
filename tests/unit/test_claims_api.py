@@ -62,3 +62,34 @@ def test_the_route_is_mounted(client) -> None:
     """
     paths = client.get("/openapi.json").json()["paths"]
     assert "/api/v1/claims/{claim_number}/summary" in paths, sorted(paths)
+
+
+def test_the_endpoint_is_wired_to_the_squad_not_the_old_summariser(client, monkeypatch) -> None:
+    """Week 12: this endpoint called `summary.summarise()` through Weeks 7, 8
+    and 10 without ever being pointed at the validated replacement those weeks
+    built - reproduced live against CLM-2026-0005 (Week 8's injection
+    fixture), where the old path told the adjuster to approve the claim on a
+    fabricated "supervisor correction". No real LLM call here (that
+    reproduction lives in eval/week12/), just proof the endpoint actually
+    calls `claims_squad.run` and correctly surfaces what it returns -
+    wiring, not model behaviour.
+    """
+    import app.api.v1.claims as claims_module
+    from app.agents.claims_squad import SquadResult
+
+    async def fake_run(session, subject, claim_number):  # noqa: ARG001
+        return SquadResult(
+            answer="stubbed squad answer",
+            raw_answer="stubbed squad answer",
+            output_overridden=True,
+        )
+
+    monkeypatch.setattr(claims_module.claims_squad, "run", fake_run)
+    app.dependency_overrides[get_subject] = lambda: _subject(UserRole.AGENT)
+
+    response = client.get("/api/v1/claims/CLM-2026-0004/summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"] == "stubbed squad answer"
+    assert body["output_overridden"] is True

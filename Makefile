@@ -1,9 +1,12 @@
-.PHONY: help install up down logs api worker ui setup migrate lint fmt type test test-security eval clean
+.PHONY: help install bootstrap up down logs api worker ui setup migrate ingest seed lint fmt type test test-security eval clean
 
 help:
+	@echo "bootstrap       one-shot: up, setup, ingest sample docs, seed claims"
 	@echo "install         install deps (CPU torch wheel first)"
 	@echo "up / down       start / stop the data plane (qdrant, postgres, valkey)"
 	@echo "setup           download models, init qdrant, run migrations"
+	@echo "ingest          load pdf/ into the vector store (default tenant)"
+	@echo "seed            insert the sample claims used by Lane B and the demos"
 	@echo "api/worker/ui   run a process locally"
 	@echo "lint fmt type   ruff check / ruff format / mypy"
 	@echo "test            full suite    test-security  authz regression only"
@@ -13,8 +16,14 @@ install:
 	pip install torch --index-url https://download.pytorch.org/whl/cpu
 	pip install -e ".[ui,eval,dev]"
 
+# A stranger's first run: data plane up and healthy, models/collection/schema
+# ready, sample policy PDFs ingested, sample claims seeded. `up --wait` needs
+# the healthchecks docker-compose.yml already defines for qdrant/postgres/valkey.
+bootstrap: up setup ingest seed
+	@echo "Bootstrap complete. Run 'make api' and 'make ui' in two more shells."
+
 up:
-	docker compose up -d qdrant postgres valkey
+	docker compose up -d --wait qdrant postgres valkey
 
 down:
 	docker compose down
@@ -29,6 +38,12 @@ setup:
 
 migrate:
 	alembic upgrade head
+
+ingest:
+	python scripts/ingest_folder.py --path pdf
+
+seed:
+	python scripts/seed_claims.py
 
 api:
 	python scripts/run_api.py   # not plain uvicorn - see the script docstring
@@ -56,7 +71,7 @@ test-security:
 	pytest -v -m security
 
 eval:
-	python -m eval.harness --dataset eval/golden/questions.jsonl
+	QUERY_EXPANSION_ENABLED=false python -m eval.harness -k 3 --label baseline --out eval/runs/baseline.json
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

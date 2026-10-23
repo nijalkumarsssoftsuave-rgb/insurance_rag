@@ -1,0 +1,31 @@
+[
+  {
+    "check": "lane_a_coverage",
+    "status": 200,
+    "intent": "policy_qa",
+    "verified": true,
+    "answer": "Dental treatment, dental surgery and orthodontic procedures of any kind are excluded from the scope of this Policy. This exclusion shall not apply whe"
+  },
+  {
+    "check": "lane_b_claim_status",
+    "status": 200,
+    "intent": "claim_status",
+    "answer": "Claim **CLM-2026-0004** (Family Health Optima, policy POL-FHO-2026-004417) has been rejected.\n- Amount claimed: ₹41,200.00\n- Amount approved: ₹0.00\n- "
+  },
+  {
+    "check": "lane_b_not_found",
+    "status": 200,
+    "answer": "I could not find a claim **CLM-9999-9999** on your policies. Please check the number, or contact support if you believe it should be there."
+  },
+  {
+    "check": "cache_hit_repeat",
+    "status": 200,
+    "ms": 1360,
+    "answer": "Dental treatment, dental surgery and orthodontic procedures of any kind are excluded from the scope of this Policy. This exclusion shall not apply whe"
+  },
+  {
+    "check": "history",
+    "status": 200,
+    "n_messages": 2
+  }
+]
